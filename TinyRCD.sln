@@ -5,6 +5,10 @@ VisualStudioVersion = 16.0.30225.117
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TinyRCD", "TinyRCD\TinyRCD.vcxproj", "{C7E9EE16-C385-42EF-9C4B-459EA24F6830}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ThirdParty", "ThirdParty", "{43EBE696-D2FD-438E-A4DE-972BEF78CCAA}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "xed", "ThirdParty\xed\xed.vcxproj", "{C4C61141-194F-4B7A-ABBC-B80D257C0644}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,9 +25,20 @@ Global
 		{C7E9EE16-C385-42EF-9C4B-459EA24F6830}.Release|x64.Build.0 = Release|x64
 		{C7E9EE16-C385-42EF-9C4B-459EA24F6830}.Release|x86.ActiveCfg = Release|Win32
 		{C7E9EE16-C385-42EF-9C4B-459EA24F6830}.Release|x86.Build.0 = Release|Win32
+		{C4C61141-194F-4B7A-ABBC-B80D257C0644}.Debug|x64.ActiveCfg = Debug|x64
+		{C4C61141-194F-4B7A-ABBC-B80D257C0644}.Debug|x64.Build.0 = Debug|x64
+		{C4C61141-194F-4B7A-ABBC-B80D257C0644}.Debug|x86.ActiveCfg = Debug|Win32
+		{C4C61141-194F-4B7A-ABBC-B80D257C0644}.Debug|x86.Build.0 = Debug|Win32
+		{C4C61141-194F-4B7A-ABBC-B80D257C0644}.Release|x64.ActiveCfg = Release|x64
+		{C4C61141-194F-4B7A-ABBC-B80D257C0644}.Release|x64.Build.0 = Release|x64
+		{C4C61141-194F-4B7A-ABBC-B80D257C0644}.Release|x86.ActiveCfg = Release|Win32
+		{C4C61141-194F-4B7A-ABBC-B80D257C0644}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{C4C61141-194F-4B7A-ABBC-B80D257C0644} = {43EBE696-D2FD-438E-A4DE-972BEF78CCAA}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A2DCB41F-3BCA-47B9-B3F4-05A14AE0D9E3}
