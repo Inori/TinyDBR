@@ -18,6 +18,11 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="mfile.py" />
+    <None Include="xed_build_common.py" />
+    <None Include="xed_mbuild.py" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <ProjectGuid>{C4C61141-194F-4B7A-ABBC-B80D257C0644}</ProjectGuid>
@@ -91,44 +96,6 @@
   </PropertyGroup>
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClInclude Include="include\public\xed\xed-agen.h" />
-    <ClInclude Include="include\public\xed\xed-attributes.h" />
-    <ClInclude Include="include\public\xed\xed-chip-features.h" />
-    <ClInclude Include="include\public\xed\xed-common-defs.h" />
-    <ClInclude Include="include\public\xed\xed-common-hdrs.h" />
-    <ClInclude Include="include\public\xed\xed-cpuid-rec.h" />
-    <ClInclude Include="include\public\xed\xed-decode.h" />
-    <ClInclude Include="include\public\xed\xed-decoded-inst-api.h" />
-    <ClInclude Include="include\public\xed\xed-decoded-inst.h" />
-    <ClInclude Include="include\public\xed\xed-disas.h" />
-    <ClInclude Include="include\public\xed\xed-encode-check.h" />
-    <ClInclude Include="include\public\xed\xed-encode-direct.h" />
-    <ClInclude Include="include\public\xed\xed-encode.h" />
-    <ClInclude Include="include\public\xed\xed-encoder-hl.h" />
-    <ClInclude Include="include\public\xed\xed-flags.h" />
-    <ClInclude Include="include\public\xed\xed-format-options.h" />
-    <ClInclude Include="include\public\xed\xed-get-time.h" />
-    <ClInclude Include="include\public\xed\xed-iform-map.h" />
-    <ClInclude Include="include\public\xed\xed-ild.h" />
-    <ClInclude Include="include\public\xed\xed-immdis.h" />
-    <ClInclude Include="include\public\xed\xed-immed.h" />
-    <ClInclude Include="include\public\xed\xed-init.h" />
-    <ClInclude Include="include\public\xed\xed-inst.h" />
-    <ClInclude Include="include\public\xed\xed-interface.h" />
-    <ClInclude Include="include\public\xed\xed-isa-set.h" />
-    <ClInclude Include="include\public\xed\xed-operand-action.h" />
-    <ClInclude Include="include\public\xed\xed-operand-values-interface.h" />
-    <ClInclude Include="include\public\xed\xed-patch.h" />
-    <ClInclude Include="include\public\xed\xed-portability.h" />
-    <ClInclude Include="include\public\xed\xed-print-info.h" />
-    <ClInclude Include="include\public\xed\xed-reg-class.h" />
-    <ClInclude Include="include\public\xed\xed-rep-prefix.h" />
-    <ClInclude Include="include\public\xed\xed-state.h" />
-    <ClInclude Include="include\public\xed\xed-types.h" />
-    <ClInclude Include="include\public\xed\xed-util.h" />
-    <ClInclude Include="include\public\xed\xed-version.h" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

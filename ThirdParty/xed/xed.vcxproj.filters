@@ -11,113 +11,14 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\public\xed\xed-agen.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-attributes.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-chip-features.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-common-defs.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-common-hdrs.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-cpuid-rec.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-decode.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-decoded-inst.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-decoded-inst-api.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-disas.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-encode.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-encode-check.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-encode-direct.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-encoder-hl.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-flags.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-format-options.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-get-time.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-iform-map.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-ild.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-immdis.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-immed.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-init.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-inst.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-interface.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-isa-set.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-operand-action.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-operand-values-interface.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-patch.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-portability.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-print-info.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-reg-class.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-rep-prefix.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-state.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-types.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-util.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\public\xed\xed-version.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
+    <None Include="mfile.py">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="xed_build_common.py">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="xed_mbuild.py">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
 </Project>
