@@ -10,17 +10,6 @@ Executor::~Executor()
 {
 }
 
-bool Executor::Run(void* code)
-{
-	bool ret = false;
-	do
-	{
-		
-		ret  = true;
-	}while(false);
-	return ret;
-}
-
 bool Executor::AddMoudle(const ModuleInfo& mod)
 {
 	modules.emplace_back(mod);
@@ -50,7 +39,7 @@ bool Executor::SetModuleCodeNX(const ModuleInfo& mod)
 			// TODO:
 			// To support multiple platform, this protect function should be abstracted.
 
-			// Maybe PAGE_NOACCESS is also OK.
+			// Since we need to read the original code, we just need to remove the EXEC property.
 			DWORD old_protect = 0;
 			BOOL bRet = VirtualProtect(range.address, range.size, PAGE_READONLY, &old_protect);
 			if (!bRet)

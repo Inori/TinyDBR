@@ -23,7 +23,12 @@ public:
 	Executor();
 	virtual ~Executor();
 
-	bool Run(void* code);
+	template <typename FuncTy, typename... ArgTys>
+	bool Run(void* code, ArgTys... args)
+	{
+		FuncTy func = reinterpret_cast<FuncTy>(code);
+		func(args...);
+	}
 
 	bool AddMoudle(const ModuleInfo& mod);
 
