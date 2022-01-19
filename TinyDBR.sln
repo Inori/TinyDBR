@@ -1,11 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
-VisualStudioVersion = 16.0.30225.117
+VisualStudioVersion = 16.0.32002.261
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TinyRCD", "TinyRCD\TinyRCD.vcxproj", "{C7E9EE16-C385-42EF-9C4B-459EA24F6830}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TinyDBR", "TinyDBR\TinyDBR.vcxproj", "{2C3AD807-FE99-4595-941C-9F45B22D8C21}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ThirdParty", "ThirdParty", "{43EBE696-D2FD-438E-A4DE-972BEF78CCAA}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ThirdParty", "ThirdParty", "{E0F5F7A3-7655-4AD8-A252-CB49B646E7F4}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "xed", "ThirdParty\xed\xed.vcxproj", "{C4C61141-194F-4B7A-ABBC-B80D257C0644}"
 EndProject
@@ -15,10 +15,10 @@ Global
 		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{C7E9EE16-C385-42EF-9C4B-459EA24F6830}.Debug|x64.ActiveCfg = Debug|x64
-		{C7E9EE16-C385-42EF-9C4B-459EA24F6830}.Debug|x64.Build.0 = Debug|x64
-		{C7E9EE16-C385-42EF-9C4B-459EA24F6830}.Release|x64.ActiveCfg = Release|x64
-		{C7E9EE16-C385-42EF-9C4B-459EA24F6830}.Release|x64.Build.0 = Release|x64
+		{2C3AD807-FE99-4595-941C-9F45B22D8C21}.Debug|x64.ActiveCfg = Debug|x64
+		{2C3AD807-FE99-4595-941C-9F45B22D8C21}.Debug|x64.Build.0 = Debug|x64
+		{2C3AD807-FE99-4595-941C-9F45B22D8C21}.Release|x64.ActiveCfg = Release|x64
+		{2C3AD807-FE99-4595-941C-9F45B22D8C21}.Release|x64.Build.0 = Release|x64
 		{C4C61141-194F-4B7A-ABBC-B80D257C0644}.Debug|x64.ActiveCfg = Debug|x64
 		{C4C61141-194F-4B7A-ABBC-B80D257C0644}.Debug|x64.Build.0 = Debug|x64
 		{C4C61141-194F-4B7A-ABBC-B80D257C0644}.Release|x64.ActiveCfg = Release|x64
@@ -28,9 +28,9 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{C4C61141-194F-4B7A-ABBC-B80D257C0644} = {43EBE696-D2FD-438E-A4DE-972BEF78CCAA}
+		{C4C61141-194F-4B7A-ABBC-B80D257C0644} = {E0F5F7A3-7655-4AD8-A252-CB49B646E7F4}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {A2DCB41F-3BCA-47B9-B3F4-05A14AE0D9E3}
+		SolutionGuid = {F3F0C001-05F8-45CB-B495-931311907306}
 	EndGlobalSection
 EndGlobal

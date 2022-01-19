@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{c7e9ee16-c385-42ef-9c4b-459ea24f6830}</ProjectGuid>
-    <RootNamespace>TinyRCD</RootNamespace>
+    <ProjectGuid>{2c3ad807-fe99-4595-941c-9f45b22d8c21}</ProjectGuid>
+    <RootNamespace>TinyDBR</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -40,15 +40,15 @@
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>ClangCL</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>ClangCL</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -78,15 +78,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(SolutionDir)Output\$(Platform)\$(Configuration)\</OutDir>
-    <IncludePath>$(SolutionDir)ThirdParty\xed\obj\wkit\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)ThirdParty\xed\obj\wkit\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)Output\$(Platform)\$(Configuration)\</OutDir>
-    <IncludePath>$(SolutionDir)ThirdParty\xed\obj\wkit\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)ThirdParty\xed\obj\wkit\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -126,7 +120,6 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>xed.lib;xed-ild.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -143,13 +136,16 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>xed.lib;xed-ild.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="arch\x86\reg.h" />
-    <ClInclude Include="arch\x86\x86_assembler.h" />
-    <ClInclude Include="arch\x86\x86_helpers.h" />
+    <ClCompile Include="common.cpp" />
+    <ClCompile Include="tinyinst.cpp" />
+    <ClCompile Include="windows\dllmain.cpp" />
+    <ClCompile Include="windows\executor.cpp" />
+    <ClCompile Include="windows\winunwind.cpp" />
+  </ItemGroup>
+  <ItemGroup>
     <ClInclude Include="assembler.h" />
     <ClInclude Include="common.h" />
     <ClInclude Include="instruction.h" />
@@ -157,15 +153,6 @@
     <ClInclude Include="unwind.h" />
     <ClInclude Include="windows\executor.h" />
     <ClInclude Include="windows\winunwind.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="arch\x86\x86_assembler.cpp" />
-    <ClCompile Include="arch\x86\x86_helpers.cpp" />
-    <ClCompile Include="common.cpp" />
-    <ClCompile Include="tinyinst.cpp" />
-    <ClCompile Include="windows\dllmain.cpp" />
-    <ClCompile Include="windows\executor.cpp" />
-    <ClCompile Include="windows\winunwind.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
