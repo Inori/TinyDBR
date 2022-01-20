@@ -64,9 +64,9 @@ enum InstructionResult {
   INST_STOPBB
 };
 
-class TinyInst : public Debugger {
+class TinyDBR : public Executor {
 public:
-  virtual void Init(int argc, char **argv) override;
+  virtual void Init() override;
 
   void EnableInstrumentation() {
     instrumentation_disabled = false;
@@ -107,7 +107,6 @@ protected:
   virtual void OnModuleLoaded(void *module, char *module_name) override;
   virtual void OnModuleUnloaded(void *module) override;
   virtual bool OnException(Exception *exception_record) override;
-  virtual void OnTargetMethodReached() override;
   virtual void OnCrashed(Exception *exception_record) override;
 
   virtual size_t GetTranslatedAddress(size_t address) override;

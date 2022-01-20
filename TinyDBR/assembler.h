@@ -24,12 +24,12 @@ limitations under the License.
 #include "instruction.h"
 
 struct IndirectBreakpoinInfo;
-class TinyInst;
+class TinyDBR;
 class ModuleInfo;
 
 class Assembler {
  public:
-  Assembler(TinyInst &tinyinst) : tinyinst_(tinyinst) {}
+  Assembler(TinyDBR &tinyinst) : tinyinst_(tinyinst) {}
   virtual ~Assembler() = default;
 
   virtual void Init() = 0;
@@ -80,7 +80,7 @@ class Assembler {
                  uint32_t target_offset) = 0;
 
  protected:
-  TinyInst &tinyinst_;
+  TinyDBR &tinyinst_;
 };
 
 #endif  // ASSEMBLER_H

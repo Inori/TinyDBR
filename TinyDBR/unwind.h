@@ -17,7 +17,7 @@ limitations under the License.
 #ifndef UNWIND_H
 #define UNWIND_H
 
-class TinyInst;
+class TinyDBR;
 class ModuleInfo;
 
 class UnwindData {
@@ -27,10 +27,10 @@ public:
 
 class UnwindGenerator {
 public:
-  UnwindGenerator(TinyInst& tinyinst) : tinyinst_(tinyinst) {}
+  UnwindGenerator(TinyDBR& tinyinst) : tinyinst_(tinyinst) {}
   virtual ~UnwindGenerator() = default;
   
-  virtual void Init(int argc, char **argv) {}
+  virtual void Init() {}
 
   virtual void OnModuleInstrumented(ModuleInfo* module) { }
   virtual void OnModuleUninstrumented(ModuleInfo* module) { }
@@ -63,7 +63,7 @@ public:
   virtual bool Is64BitOnly() { return false; }
 
 protected:
-	TinyInst& tinyinst_;
+	TinyDBR& tinyinst_;
 };
 
 #endif // UNWIND_H

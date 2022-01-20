@@ -2,40 +2,98 @@
 
 #include <vector>
 #include <string>
+#include <list>
+#include "../singleton.h"
+#include "../common.h"
 
-struct CodeRange
+struct _EXCEPTION_POINTERS;
+
+
+
+class Executor : public Singleton<Executor>
 {
-	void* address;
-	size_t size;
-};
-
-
-struct ModuleInfo
-{
-	std::string module_name;
-	std::vector<CodeRange> code_ranges;
-};
-
-
-class Executor
-{
+	friend class Singleton<Executor>;
 public:
 	Executor();
 	virtual ~Executor();
 
-	template <typename FuncTy, typename... ArgTys>
+	virtual void Init();
+
+	virtual void Unit();
+
+	// The caller should make sure
+	// code is within added modules.
+	template <typename... ArgTys>
 	bool Run(void* code, ArgTys... args)
 	{
-		FuncTy func = reinterpret_cast<FuncTy>(code);
-		func(args...);
+		typedef int (*FuncTy)(ArgTys... args);
+
+		bool ret = false;
+		do
+		{
+			// TODO:
+			// Check if the code is within added modules.
+			if (!code)
+			{
+				break;
+			}
+
+			FuncTy func = reinterpret_cast<FuncTy>(code);
+			int ret_val = func(args...);
+
+			ret  = true;
+		}while(false);
+		return ret;
+
 	}
 
-	bool AddMoudle(const ModuleInfo& mod);
+	bool AddMoudle(const CodeModule& mod);
+
+protected:
+
+	enum ExceptionType {
+		BREAKPOINT,
+		ACCESS_VIOLATION,
+		ILLEGAL_INSTRUCTION,
+		STACK_OVERFLOW,
+		OTHER
+	};
+
+	struct Exception {
+		ExceptionType type;
+		void* ip;
+		bool maybe_write_violation;
+		bool maybe_execute_violation;
+		void* access_address;
+	};
+
+	virtual void OnEntrypoint();
+	virtual void OnProcessCreated();
+	virtual void OnProcessExit();
+	virtual void OnModuleLoaded(void* module, char* module_name);
+	virtual void OnModuleUnloaded(void* module);
+	virtual bool OnException(Exception* exception_record);
+	virtual void OnCrashed(Exception* exception_record);
+
+	virtual size_t GetTranslatedAddress(size_t address);
+
+protected:
+	void ExtractCodeRanges(void* module_base,
+		size_t min_address,
+		size_t max_address,
+		std::list<AddressRange>* executable_ranges,
+		size_t* code_size);
 
 private:
-	bool SetModuleCodeNX(const ModuleInfo& mod);
+	// bool SetModuleCodeNX(const CodeModule& mod);
+
+	void* InstallVEHHandler();
+
+	void UninstallVEHHandler(void* handle);
+
+	static long VectoredExceptionHandler(_EXCEPTION_POINTERS* ExceptionInfo);
 
 private:
-	std::vector<ModuleInfo> modules;
+	void* veh_handle = nullptr;
 };
 

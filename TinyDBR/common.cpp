@@ -27,6 +27,8 @@ uint64_t GetCurTime(void) {
   return millis;
 }
 
+#if 0
+
 bool BoolFromOptionValue(char *value) {
   if (_stricmp(value, "off") == 0) return false;
   if (_stricmp(value, "false") == 0) return false;
@@ -202,3 +204,5 @@ char *ArgvToCmd(int argc, char** argv) {
 
   return ret;
 }
+
+#endif

@@ -22,7 +22,7 @@ limitations under the License.
 
 #include <list>
 
-#include "tinyinst.h"
+#include "tinydbr.h"
 
 #ifdef ARM64
   #include "arch/arm64/arm64_assembler.h"
@@ -74,14 +74,14 @@ void ModuleInfo::ClearInstrumentation() {
   tracepoints.clear();
 }
 
-void TinyInst::InvalidateCrossModuleLink(CrossModuleLink *link) {
+void TinyDBR::InvalidateCrossModuleLink(CrossModuleLink *link) {
   ModuleInfo *module1 = link->module1;
   size_t original_value = ReadPointer(module1, link->offset1);
   WritePointerAtOffset(module1, original_value, link->offset1 + child_ptr_size);
   CommitCode(module1, link->offset1 + child_ptr_size, child_ptr_size);
 }
 
-void TinyInst::FixCrossModuleLink(CrossModuleLink *link) {
+void TinyDBR::FixCrossModuleLink(CrossModuleLink *link) {
   ModuleInfo *module1 = link->module1;
   ModuleInfo *module2 = link->module2;
 
@@ -94,7 +94,7 @@ void TinyInst::FixCrossModuleLink(CrossModuleLink *link) {
   CommitCode(module1, link->offset1, 2 * child_ptr_size);
 }
 
-void TinyInst::InvalidateCrossModuleLinks(ModuleInfo *module) {
+void TinyDBR::InvalidateCrossModuleLinks(ModuleInfo *module) {
   for (auto iter = cross_module_links.begin(); iter != cross_module_links.end(); iter++) {
     if (iter->module2 == module) {
       InvalidateCrossModuleLink(&(*iter));
@@ -102,13 +102,13 @@ void TinyInst::InvalidateCrossModuleLinks(ModuleInfo *module) {
   }
 }
 
-void TinyInst::InvalidateCrossModuleLinks() {
+void TinyDBR::InvalidateCrossModuleLinks() {
   for (auto iter = cross_module_links.begin(); iter != cross_module_links.end(); iter++) {
     InvalidateCrossModuleLink(&(*iter));
   }
 }
 
-void TinyInst::FixCrossModuleLinks(ModuleInfo *module) {
+void TinyDBR::FixCrossModuleLinks(ModuleInfo *module) {
   for (auto iter = cross_module_links.begin(); iter != cross_module_links.end(); iter++) {
     if (iter->module2 == module) {
       FixCrossModuleLink(&(*iter));
@@ -116,7 +116,7 @@ void TinyInst::FixCrossModuleLinks(ModuleInfo *module) {
   }
 }
 
-void TinyInst::ClearCrossModuleLinks(ModuleInfo *module) {
+void TinyDBR::ClearCrossModuleLinks(ModuleInfo *module) {
   auto iter = cross_module_links.begin();
   while (iter != cross_module_links.end()) {
     if (iter->module1 == module) {
@@ -127,7 +127,7 @@ void TinyInst::ClearCrossModuleLinks(ModuleInfo *module) {
   }
 }
 
-void TinyInst::ClearCrossModuleLinks() {
+void TinyDBR::ClearCrossModuleLinks() {
   cross_module_links.clear();
 }
 
@@ -136,7 +136,7 @@ void TinyInst::ClearCrossModuleLinks() {
 // points to indirect_breakpoint_address.
 // When a new indirect jump/call target is detected, this will cause a breakpoint
 // which will be resolved by adding a new entry into this hashtable.
-void TinyInst::InitGlobalJumptable(ModuleInfo *module) {
+void TinyDBR::InitGlobalJumptable(ModuleInfo *module) {
   size_t code_size_before = module->instrumented_code_allocated;
 
   module->jumptable_offset = module->instrumented_code_allocated;
@@ -163,12 +163,12 @@ void TinyInst::InitGlobalJumptable(ModuleInfo *module) {
 
 // gets the current code address in the instrumented code
 // *in the child process*
-size_t TinyInst::GetCurrentInstrumentedAddress(ModuleInfo *module) {
+size_t TinyDBR::GetCurrentInstrumentedAddress(ModuleInfo *module) {
   return (size_t)module->instrumented_code_remote + module->instrumented_code_allocated;
 }
 
 // Writes the modified code from the debugger process into the target process
-void TinyInst::CommitCode(ModuleInfo *module, size_t start_offset, size_t size) {
+void TinyDBR::CommitCode(ModuleInfo *module, size_t start_offset, size_t size) {
   if (!module->instrumented_code_remote) return;
 
   RemoteWrite(module->instrumented_code_remote + start_offset,
@@ -178,7 +178,7 @@ void TinyInst::CommitCode(ModuleInfo *module, size_t start_offset, size_t size) 
 }
 
 // Checks if there is sufficient space and writes code at the current offset
-void TinyInst::WriteCode(ModuleInfo *module, void *data, size_t size) {
+void TinyDBR::WriteCode(ModuleInfo *module, void *data, size_t size) {
   if (module->instrumented_code_allocated + size > module->instrumented_code_size) {
     FATAL("Insufficient memory allocated for instrumented code");
   }
@@ -188,7 +188,7 @@ void TinyInst::WriteCode(ModuleInfo *module, void *data, size_t size) {
 }
 
 // Checks if there is sufficient space and writes code at the chosen offset
-void TinyInst::WriteCodeAtOffset(ModuleInfo *module, size_t offset, void *data, size_t size) {
+void TinyDBR::WriteCodeAtOffset(ModuleInfo *module, size_t offset, void *data, size_t size) {
   if (offset + size > module->instrumented_code_size) {
     FATAL("Insufficient memory allocated for instrumented code");
   }
@@ -201,7 +201,7 @@ void TinyInst::WriteCodeAtOffset(ModuleInfo *module, size_t offset, void *data, 
 }
 
 // writes a pointer to the instrumented code
-void TinyInst::WritePointer(ModuleInfo *module, size_t value) {
+void TinyDBR::WritePointer(ModuleInfo *module, size_t value) {
   if (module->instrumented_code_allocated + child_ptr_size > module->instrumented_code_size) {
     FATAL("Insufficient memory allocated for instrumented code");
   }
@@ -218,7 +218,7 @@ void TinyInst::WritePointer(ModuleInfo *module, size_t value) {
 }
 
 // writes a pointer to the instrumented code
-void TinyInst::WritePointerAtOffset(ModuleInfo *module, size_t value, size_t offset) {
+void TinyDBR::WritePointerAtOffset(ModuleInfo *module, size_t value, size_t offset) {
   if (offset + child_ptr_size > module->instrumented_code_size) {
     FATAL("Insufficient memory allocated for instrumented code");
   }
@@ -235,7 +235,7 @@ void TinyInst::WritePointerAtOffset(ModuleInfo *module, size_t value, size_t off
 }
 
 // reads a pointer from the instrumented code
-size_t TinyInst::ReadPointer(ModuleInfo *module, size_t offset) {
+size_t TinyDBR::ReadPointer(ModuleInfo *module, size_t offset) {
   if (child_ptr_size == 8) {
     return (size_t)(*(uint64_t *)(module->instrumented_code_local + offset));
   } else {
@@ -247,7 +247,7 @@ size_t TinyInst::ReadPointer(ModuleInfo *module, size_t offset) {
 // instrumented code) to jump to the given basic block (at offset bb in the
 // original code) in case the basic block hasn't been instrumented yet, queues
 // it for instrumentation
-void TinyInst::FixOffsetOrEnqueue(
+void TinyDBR::FixOffsetOrEnqueue(
     ModuleInfo *module,
     uint32_t bb,
     uint32_t jmp_offset,
@@ -266,7 +266,7 @@ void TinyInst::FixOffsetOrEnqueue(
 }
 
 // various breakpoints
-bool TinyInst::HandleBreakpoint(void *address) {
+bool TinyDBR::HandleBreakpoint(void *address) {
   ModuleInfo *module = GetModuleFromInstrumented((size_t)address);
   if (!module) return false;
 
@@ -304,7 +304,7 @@ bool TinyInst::HandleBreakpoint(void *address) {
 // handles a breakpoint that occurs
 // when an indirect jump or call wants to go to a previously
 // unseen target
-bool TinyInst::HandleIndirectJMPBreakpoint(void *address) {
+bool TinyDBR::HandleIndirectJMPBreakpoint(void *address) {
   if (indirect_instrumentation_mode == II_NONE) return false;
 
   ModuleInfo *module = GetModuleFromInstrumented((size_t)address);
@@ -375,7 +375,7 @@ bool TinyInst::HandleIndirectJMPBreakpoint(void *address) {
 
 // adds another observed original_target -> actual_target pair
 // to the golbal jumptable at the appropriate location
-size_t TinyInst::AddTranslatedJump(ModuleInfo *module,
+size_t TinyDBR::AddTranslatedJump(ModuleInfo *module,
                                    ModuleInfo *target_module,
                                    size_t original_target,
                                    size_t actual_target,
@@ -434,7 +434,7 @@ size_t TinyInst::AddTranslatedJump(ModuleInfo *module,
   return entry_offset;
 }
 
-TinyInst::IndirectInstrumentation TinyInst::ShouldInstrumentIndirect(
+TinyDBR::IndirectInstrumentation TinyDBR::ShouldInstrumentIndirect(
   ModuleInfo *module,
   Instruction& inst,
   size_t instruction_address) {
@@ -463,7 +463,7 @@ TinyInst::IndirectInstrumentation TinyInst::ShouldInstrumentIndirect(
 
 // when an invalid instruction is encountered
 // emit a breakpoint followed by crashing the process
-void TinyInst::InvalidInstruction(ModuleInfo *module) {
+void TinyDBR::InvalidInstruction(ModuleInfo *module) {
   size_t breakpoint_address = (size_t)module->instrumented_code_remote +
                               module->instrumented_code_allocated;
   assembler_->Breakpoint(module);
@@ -471,7 +471,7 @@ void TinyInst::InvalidInstruction(ModuleInfo *module) {
   assembler_->Crash(module);
 }
 
-void TinyInst::InstrumentIndirect(ModuleInfo *module,
+void TinyDBR::InstrumentIndirect(ModuleInfo *module,
                                   Instruction& inst,
                                   size_t instruction_address,
                                   IndirectInstrumentation mode,
@@ -486,7 +486,7 @@ void TinyInst::InstrumentIndirect(ModuleInfo *module,
   }
 }
 
-void TinyInst::TranslateBasicBlock(char *address,
+void TinyDBR::TranslateBasicBlock(char *address,
                                    ModuleInfo *module,
                                    std::set<char *> *queue,
                                    std::list<std::pair<uint32_t, uint32_t>> *offset_fixes) {
@@ -592,7 +592,7 @@ void TinyInst::TranslateBasicBlock(char *address,
 // any other basic blocks detected during instrumentation
 // (e.g. jump, call targets) get added to the queue
 // and instrumented as well
-void TinyInst::TranslateBasicBlockRecursive(char *address, ModuleInfo *module) {
+void TinyDBR::TranslateBasicBlockRecursive(char *address, ModuleInfo *module) {
   std::set<char *> queue;
   std::list<std::pair<uint32_t, uint32_t>> offset_fixes;
 
@@ -625,7 +625,7 @@ void TinyInst::TranslateBasicBlockRecursive(char *address, ModuleInfo *module) {
 }
 
 // gets ModuleInfo for the module specified by name
-ModuleInfo *TinyInst::GetModuleByName(const char *name) {
+ModuleInfo *TinyDBR::GetModuleByName(const char *name) {
   for (auto iter = instrumented_modules.begin(); iter != instrumented_modules.end(); iter++) {
     ModuleInfo *cur_module = *iter;
     if (_stricmp(cur_module->module_name.c_str(), name) == 0) {
@@ -637,7 +637,7 @@ ModuleInfo *TinyInst::GetModuleByName(const char *name) {
 }
 
 // gets module corresponding to address
-ModuleInfo *TinyInst::GetModule(size_t address) {
+ModuleInfo *TinyDBR::GetModule(size_t address) {
   for (auto iter = instrumented_modules.begin(); iter != instrumented_modules.end(); iter++) {
     ModuleInfo *cur_module = *iter;
     if (!cur_module->loaded) continue;
@@ -655,7 +655,7 @@ ModuleInfo *TinyInst::GetModule(size_t address) {
 }
 
 // gets a memory region corresponding to address
-AddressRange *TinyInst::GetRegion(ModuleInfo *module, size_t address) {
+AddressRange *TinyDBR::GetRegion(ModuleInfo *module, size_t address) {
   for (auto iter = module->executable_ranges.begin();
        iter != module->executable_ranges.end(); iter++)
   {
@@ -670,7 +670,7 @@ AddressRange *TinyInst::GetRegion(ModuleInfo *module, size_t address) {
 }
 
 // gets module where address falls into instrumented code buffer
-ModuleInfo *TinyInst::GetModuleFromInstrumented(size_t address) {
+ModuleInfo *TinyDBR::GetModuleFromInstrumented(size_t address) {
   for (auto iter = instrumented_modules.begin(); iter != instrumented_modules.end(); iter++) {
     ModuleInfo *cur_module = *iter;
     if (!cur_module->loaded) continue;
@@ -687,7 +687,7 @@ ModuleInfo *TinyInst::GetModuleFromInstrumented(size_t address) {
   return NULL;
 }
 
-void TinyInst::OnCrashed(Exception *exception_record) {
+void TinyDBR::OnCrashed(Exception *exception_record) {
   char *address = (char *)exception_record->ip;
 
   printf("Exception at address %p\n", static_cast<void*>(address));
@@ -725,7 +725,7 @@ void TinyInst::OnCrashed(Exception *exception_record) {
 
 // gets the address in the instrumented code corresponding to
 // address in the original module
-size_t TinyInst::GetTranslatedAddress(ModuleInfo *module, size_t address) {
+size_t TinyDBR::GetTranslatedAddress(ModuleInfo *module, size_t address) {
   uint32_t offset = (uint32_t)(address - (size_t)module->min_address);
   uint32_t translated_offset;
 
@@ -746,7 +746,7 @@ size_t TinyInst::GetTranslatedAddress(ModuleInfo *module, size_t address) {
   return (size_t)module->instrumented_code_remote + translated_offset;
 }
 
-size_t TinyInst::GetTranslatedAddress(size_t address) {
+size_t TinyDBR::GetTranslatedAddress(size_t address) {
   ModuleInfo *module = GetModule(address);
   if (!module) return address;
   if (!module->instrumented) return address;
@@ -755,7 +755,7 @@ size_t TinyInst::GetTranslatedAddress(size_t address) {
 
 // checks if address falls into one of the instrumented modules
 // and if so, redirects execution to the translated code
-bool TinyInst::TryExecuteInstrumented(char *address) {
+bool TinyDBR::TryExecuteInstrumented(char *address) {
   ModuleInfo *module = GetModule((size_t)address);
 
   if (!module) return false;
@@ -779,21 +779,21 @@ bool TinyInst::TryExecuteInstrumented(char *address) {
   return true;
 }
 
-void TinyInst::OnReturnAddress(ModuleInfo *module, size_t original_address, size_t translated_address) {
+void TinyDBR::OnReturnAddress(ModuleInfo *module, size_t original_address, size_t translated_address) {
   unwind_generator->OnReturnAddress(module, original_address, translated_address);
 }
 
-void TinyInst::OnModuleInstrumented(ModuleInfo* module) {
+void TinyDBR::OnModuleInstrumented(ModuleInfo* module) {
   unwind_generator->OnModuleInstrumented(module);
 }
 
-void TinyInst::OnModuleUninstrumented(ModuleInfo* module) {
+void TinyDBR::OnModuleUninstrumented(ModuleInfo* module) {
   unwind_generator->OnModuleUninstrumented(module);
 }
 
 // clears all instrumentation data from module locally
 // and if clear_remote_data is set, also in the remote process
-void TinyInst::ClearInstrumentation(ModuleInfo *module) {
+void TinyDBR::ClearInstrumentation(ModuleInfo *module) {
   if (module->instrumented_code_remote) {
     RemoteFree(module->instrumented_code_remote,
                module->instrumented_code_size);
@@ -804,7 +804,7 @@ void TinyInst::ClearInstrumentation(ModuleInfo *module) {
   ClearCrossModuleLinks(module);
 }
 
-void TinyInst::InstrumentModule(ModuleInfo *module) {
+void TinyDBR::InstrumentModule(ModuleInfo *module) {
   if (instrumentation_disabled) return;
 
   // if the module was previously instrumented
@@ -867,7 +867,7 @@ void TinyInst::InstrumentModule(ModuleInfo *module) {
   if (patch_module_entries) PatchModuleEntries(module);
 }
 
-void TinyInst::PatchPointersLocal(char* buf, size_t size, std::unordered_map<size_t, size_t>& search_replace, bool commit_code, ModuleInfo* module) {
+void TinyDBR::PatchPointersLocal(char* buf, size_t size, std::unordered_map<size_t, size_t>& search_replace, bool commit_code, ModuleInfo* module) {
   if (child_ptr_size == 4) {
     PatchPointersLocalT<uint32_t>(buf, size, search_replace, commit_code, module);
   } else {
@@ -876,7 +876,7 @@ void TinyInst::PatchPointersLocal(char* buf, size_t size, std::unordered_map<siz
 }
 
 template<typename T>
-void TinyInst::PatchPointersLocalT(char* buf, size_t size, std::unordered_map<size_t, size_t>& search_replace, bool commit_code, ModuleInfo* module) {
+void TinyDBR::PatchPointersLocalT(char* buf, size_t size, std::unordered_map<size_t, size_t>& search_replace, bool commit_code, ModuleInfo* module) {
   size -= child_ptr_size - 1;
   for (size_t i = 0; i < size; i++) {
     T ptr = *(T*)(buf);
@@ -894,7 +894,7 @@ void TinyInst::PatchPointersLocalT(char* buf, size_t size, std::unordered_map<si
   }
 }
 
-void TinyInst::PatchModuleEntries(ModuleInfo* module) {
+void TinyDBR::PatchModuleEntries(ModuleInfo* module) {
   if (!patch_module_entries) return;
 
   if (module->entry_offsets.empty()) return;
@@ -948,7 +948,7 @@ void TinyInst::PatchModuleEntries(ModuleInfo* module) {
 
 // walks the list of modules and instruments
 // all loaded so far
-void TinyInst::InstrumentAllLoadedModules() {
+void TinyDBR::InstrumentAllLoadedModules() {
   for (auto iter = instrumented_modules.begin();
        iter != instrumented_modules.end(); iter++) {
     ModuleInfo *cur_module = *iter;
@@ -960,7 +960,7 @@ void TinyInst::InstrumentAllLoadedModules() {
 }
 
 // should we instrument coverage for this module
-ModuleInfo *TinyInst::IsInstrumentModule(char *module_name) {
+ModuleInfo *TinyDBR::IsInstrumentModule(char *module_name) {
   for (auto iter = instrumented_modules.begin();
        iter != instrumented_modules.end(); iter++)
   {
@@ -972,7 +972,7 @@ ModuleInfo *TinyInst::IsInstrumentModule(char *module_name) {
   return NULL;
 }
 
-void TinyInst::OnInstrumentModuleLoaded(void *module, ModuleInfo *target_module) {
+void TinyDBR::OnInstrumentModuleLoaded(void *module, ModuleInfo *target_module) {
   if (target_module->instrumented &&
       target_module->module_header &&
       (target_module->module_header != (void *)module))
@@ -998,8 +998,8 @@ void TinyInst::OnInstrumentModuleLoaded(void *module, ModuleInfo *target_module)
 }
 
 // called when a potentialy interesting module gets loaded
-void TinyInst::OnModuleLoaded(void *module, char *module_name) {
-  Debugger::OnModuleLoaded(module, module_name);
+void TinyDBR::OnModuleLoaded(void *module, char *module_name) {
+  Executor::OnModuleLoaded(module, module_name);
 
   unwind_generator->OnModuleLoaded(module, module_name);
   
@@ -1010,8 +1010,8 @@ void TinyInst::OnModuleLoaded(void *module, char *module_name) {
 }
 
 // called when a potentialy interesting module gets loaded
-void TinyInst::OnModuleUnloaded(void *module) {
-  Debugger::OnModuleUnloaded(module);
+void TinyDBR::OnModuleUnloaded(void *module) {
+  Executor::OnModuleUnloaded(module);
 
   for (auto iter = instrumented_modules.begin();
        iter != instrumented_modules.end(); iter++)
@@ -1027,20 +1027,15 @@ void TinyInst::OnModuleUnloaded(void *module) {
   }
 }
 
-void TinyInst::OnTargetMethodReached() {
-  Debugger::OnTargetMethodReached();
 
-  if (target_function_defined && !instrument_modules_on_load) InstrumentAllLoadedModules();
-}
-
-void TinyInst::OnEntrypoint() {
-  Debugger::OnEntrypoint();
+void TinyDBR::OnEntrypoint() {
+  Executor::OnEntrypoint();
 
   if(!target_function_defined && !instrument_modules_on_load) InstrumentAllLoadedModules();
 }
 
 
-bool TinyInst::OnException(Exception *exception_record) {
+bool TinyDBR::OnException(Exception *exception_record) {
   switch (exception_record->type)
   {
   case BREAKPOINT:
@@ -1063,8 +1058,8 @@ bool TinyInst::OnException(Exception *exception_record) {
   return false;
 }
 
-void TinyInst::OnProcessCreated() {
-  Debugger::OnProcessCreated();
+void TinyDBR::OnProcessCreated() {
+  Executor::OnProcessCreated();
 
   if ((child_ptr_size == 4) && unwind_generator->Is64BitOnly()) {
     WARN("generate_unwind used with 32-bit process. Disabling.");
@@ -1073,8 +1068,8 @@ void TinyInst::OnProcessCreated() {
   }
 }
 
-void TinyInst::OnProcessExit() {
-  Debugger::OnProcessExit();
+void TinyDBR::OnProcessExit() {
+  Executor::OnProcessExit();
 
   // clear all instrumentation data
   for (auto iter = instrumented_modules.begin();
@@ -1090,10 +1085,9 @@ void TinyInst::OnProcessExit() {
 }
 
 // initializes instrumentation from command line options
-void TinyInst::Init(int argc, char **argv) {
-  // init the debugger first
-  Debugger::Init(argc, argv);
-
+void TinyDBR::Init() {
+  // init the executor first
+  Executor::Init();
 #ifdef ARM64
   assembler_ = new Arm64Assembler(*this);
 #else
@@ -1103,13 +1097,21 @@ void TinyInst::Init(int argc, char **argv) {
 
   instrumentation_disabled = false;
 
-  instrument_modules_on_load = GetBinaryOption("-instrument_modules_on_load", argc, argv, false);
-  patch_return_addresses = GetBinaryOption("-patch_return_addresses", argc, argv, false);
-  instrument_cross_module_calls = GetBinaryOption("-instrument_cross_module_calls", argc, argv, true);
-  persist_instrumentation_data = GetBinaryOption("-persist_instrumentation_data", argc, argv, true);
+  //instrument_modules_on_load = GetBinaryOption("-instrument_modules_on_load", argc, argv, false);
+  //patch_return_addresses = GetBinaryOption("-patch_return_addresses", argc, argv, false);
+  //instrument_cross_module_calls = GetBinaryOption("-instrument_cross_module_calls", argc, argv, true);
+  //persist_instrumentation_data = GetBinaryOption("-persist_instrumentation_data", argc, argv, true);
 
-  trace_basic_blocks = GetBinaryOption("-trace_basic_blocks", argc, argv, false);
-  trace_module_entries = GetBinaryOption("-trace_module_entries", argc, argv, false);
+  //trace_basic_blocks = GetBinaryOption("-trace_basic_blocks", argc, argv, false);
+  //trace_module_entries = GetBinaryOption("-trace_module_entries", argc, argv, false);
+
+  instrument_modules_on_load = false;
+  patch_return_addresses = false;
+  instrument_cross_module_calls = true;
+  persist_instrumentation_data = true;
+
+  trace_basic_blocks = false;
+  trace_module_entries = false;
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) || defined(ARM64)
   sp_offset = 0;
@@ -1123,7 +1125,8 @@ void TinyInst::Init(int argc, char **argv) {
   sp_offset = 256;
 #endif
   
-  sp_offset = GetIntOption("-stack_offset", argc, argv, sp_offset);
+  // sp_offset = GetIntOption("-stack_offset", argc, argv, sp_offset);
+  sp_offset = 0;
 
   std::list <char *> module_names;
   GetOptionAll("-instrument_module", argc, argv, &module_names);
@@ -1136,40 +1139,43 @@ void TinyInst::Init(int argc, char **argv) {
   char *option;
 
   indirect_instrumentation_mode = II_AUTO;
-  option = GetOption("-indirect_instrumentation", argc, argv);
-  if (option) {
-    if (strcmp(option, "none") == 0)
-      indirect_instrumentation_mode = II_NONE;
-    else if (strcmp(option, "local") == 0)
-      indirect_instrumentation_mode = II_LOCAL;
-    else if (strcmp(option, "global") == 0)
-      indirect_instrumentation_mode = II_GLOBAL;
-    else if (strcmp(option, "auto") == 0)
-      indirect_instrumentation_mode = II_AUTO;
-    else
-      FATAL("Unknown indirect instrumentation mode");
-  }
+  //option = GetOption("-indirect_instrumentation", argc, argv);
+  //if (option) {
+  //  if (strcmp(option, "none") == 0)
+  //    indirect_instrumentation_mode = II_NONE;
+  //  else if (strcmp(option, "local") == 0)
+  //    indirect_instrumentation_mode = II_LOCAL;
+  //  else if (strcmp(option, "global") == 0)
+  //    indirect_instrumentation_mode = II_GLOBAL;
+  //  else if (strcmp(option, "auto") == 0)
+  //    indirect_instrumentation_mode = II_AUTO;
+  //  else
+  //    FATAL("Unknown indirect instrumentation mode");
+  //}
 
   patch_module_entries = PatchModuleEntriesValue::OFF;
-  option = GetOption("-patch_module_entries", argc, argv);
-  if (option) {
-    if (strcmp(option, "off") == 0)
-      patch_module_entries = PatchModuleEntriesValue::OFF;
-    else if (strcmp(option, "data") == 0)
-      patch_module_entries = PatchModuleEntriesValue::DATA;
-    else if (strcmp(option, "code") == 0)
-      patch_module_entries = PatchModuleEntriesValue::CODE;
-    else if (strcmp(option, "all") == 0)
-      patch_module_entries = PatchModuleEntriesValue::ALL;
-    else
-      FATAL("Unknown -patch_module_entries value");
-  }
+  //option = GetOption("-patch_module_entries", argc, argv);
+  //if (option) {
+  //  if (strcmp(option, "off") == 0)
+  //    patch_module_entries = PatchModuleEntriesValue::OFF;
+  //  else if (strcmp(option, "data") == 0)
+  //    patch_module_entries = PatchModuleEntriesValue::DATA;
+  //  else if (strcmp(option, "code") == 0)
+  //    patch_module_entries = PatchModuleEntriesValue::CODE;
+  //  else if (strcmp(option, "all") == 0)
+  //    patch_module_entries = PatchModuleEntriesValue::ALL;
+  //  else
+  //    FATAL("Unknown -patch_module_entries value");
+  //}
 
-  generate_unwind = GetBinaryOption("-generate_unwind", argc, argv, false);
+  // generate_unwind = GetBinaryOption("-generate_unwind", argc, argv, false);
+  generate_unwind = false;
 
   // if patch_return_addresses is on, disable generate_unwind
   // regardless of the flag
-  if (patch_return_addresses) generate_unwind = false;
+  if (patch_return_addresses) {
+      generate_unwind = false;
+  }
 
   if (!generate_unwind) {
     unwind_generator = new UnwindGenerator(*this);
@@ -1183,5 +1189,5 @@ void TinyInst::Init(int argc, char **argv) {
     unwind_generator = new UnwindGenerator(*this);
 #endif
   }
-  unwind_generator->Init(argc, argv);
+  unwind_generator->Init();
 }

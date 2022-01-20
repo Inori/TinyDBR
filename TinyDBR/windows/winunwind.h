@@ -19,8 +19,8 @@ limitations under the License.
 
 #ifdef _WIN64
 
-#include "unwind.h"
-#include "tinyinst.h"
+#include "..\unwind.h"
+#include "..\tinydbr.h"
 
 #include <vector>
 #include <set>
@@ -116,7 +116,7 @@ public:
 
 class WinUnwindGenerator : public UnwindGenerator {
 public:
-	WinUnwindGenerator(TinyInst& tinyinst) : UnwindGenerator(tinyinst), RtlAddFunctionTable_addr(0) { }
+	WinUnwindGenerator(TinyDBR& tinyinst) : UnwindGenerator(tinyinst), RtlAddFunctionTable_addr(0) { }
 
 	void OnModuleInstrumented(ModuleInfo* module) override;
 	void OnModuleUninstrumented(ModuleInfo* module) override;
