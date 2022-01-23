@@ -990,8 +990,6 @@ void TinyDBR::OnInstrumentModuleLoaded(void *module, ModuleInfo *target_module) 
 
   if(instrument_modules_on_load) {
     InstrumentModule(target_module);
-  } else if (target_function_defined) {
-    if (target_reached) InstrumentModule(target_module);
   } else if (child_entrypoint_reached) {
     InstrumentModule(target_module);
   }
@@ -1031,7 +1029,7 @@ void TinyDBR::OnModuleUnloaded(void *module) {
 void TinyDBR::OnEntrypoint() {
   Executor::OnEntrypoint();
 
-  if(!target_function_defined && !instrument_modules_on_load) InstrumentAllLoadedModules();
+  InstrumentAllLoadedModules();
 }
 
 
@@ -1129,12 +1127,12 @@ void TinyDBR::Init() {
   sp_offset = 0;
 
   std::list <char *> module_names;
-  GetOptionAll("-instrument_module", argc, argv, &module_names);
-  for (auto iter = module_names.begin(); iter != module_names.end(); iter++) {
-    ModuleInfo *new_module = new ModuleInfo();
-    new_module->module_name = *iter;
-    instrumented_modules.push_back(new_module);
-  }
+  //GetOptionAll("-instrument_module", argc, argv, &module_names);
+  //for (auto iter = module_names.begin(); iter != module_names.end(); iter++) {
+  //  ModuleInfo *new_module = new ModuleInfo();
+  //  new_module->module_name = *iter;
+  //  instrumented_modules.push_back(new_module);
+  //}
 
   char *option;
 

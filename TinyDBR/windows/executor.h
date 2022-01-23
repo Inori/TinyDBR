@@ -3,12 +3,17 @@
 #include <vector>
 #include <string>
 #include <list>
+#include <unordered_set>
+#include <unordered_map>
 #include "../singleton.h"
 #include "../common.h"
 
 struct _EXCEPTION_POINTERS;
 
-
+struct SavedRegisters
+{
+	CONTEXT saved_context;
+};
 
 class Executor : public Singleton<Executor>
 {
@@ -47,7 +52,7 @@ public:
 
 	}
 
-	bool AddMoudle(const CodeModule& mod);
+	// bool AddMoudle(const CodeModule& mod);
 
 protected:
 
@@ -78,11 +83,54 @@ protected:
 	virtual size_t GetTranslatedAddress(size_t address);
 
 protected:
+	enum MemoryProtection
+	{
+		READONLY,
+		READWRITE,
+		READEXECUTE,
+		READWRITEEXECUTE
+	};
+
+protected:
 	void ExtractCodeRanges(void* module_base,
 		size_t min_address,
 		size_t max_address,
 		std::list<AddressRange>* executable_ranges,
 		size_t* code_size);
+
+	void ProtectCodeRanges(
+		std::list<AddressRange>* executable_ranges);
+
+	DWORD GetImageSize(void* base_address);
+	void  GetImageSize(
+		 void*   base_address,
+		 size_t* min_address,
+		 size_t* max_address);
+
+
+	void GetExceptionHandlers(size_t module_haeder, std::unordered_set<size_t>& handlers);
+
+	void PatchPointersRemote(size_t min_address, size_t max_address, std::unordered_map<size_t, size_t>& search_replace);
+	template <typename T>
+	void PatchPointersRemoteT(size_t min_address, size_t max_address, std::unordered_map<size_t, size_t>& search_replace);
+	
+
+	void* RemoteAllocateNear(uint64_t         region_min,
+							 uint64_t         region_max,
+							 size_t           size,
+							 MemoryProtection protection,
+							 bool             use_shared_memory = false);
+	void  RemoteFree(void* address, size_t size);
+	void  RemoteWrite(void* address, void* buffer, size_t size);
+	void  RemoteRead(void* address, void* buffer, size_t size);
+	void  RemoteProtect(void* address, size_t size, MemoryProtection protect);
+
+	  size_t GetRegister(Register r);
+	void   SetRegister(Register r, size_t value);
+
+protected:
+	int32_t child_ptr_size = sizeof(void*);
+	bool    child_entrypoint_reached = false;
 
 private:
 	// bool SetModuleCodeNX(const CodeModule& mod);
@@ -93,7 +141,22 @@ private:
 
 	static long VectoredExceptionHandler(_EXCEPTION_POINTERS* ExceptionInfo);
 
+	void* RemoteAllocateBefore(uint64_t         min_address,
+							   uint64_t         max_address,
+							   size_t           size,
+							   MemoryProtection protection);
+
+	void* RemoteAllocateAfter(uint64_t         min_address,
+							  uint64_t         max_address,
+							  size_t           size,
+							  MemoryProtection protection);
+
+	DWORD WindowsProtectionFlags(MemoryProtection protection);
+
 private:
-	void* veh_handle = nullptr;
+	void*  veh_handle             = nullptr;
+	size_t allocation_granularity = 0;
+	HANDLE self_handle            = NULL;
 };
+
 
