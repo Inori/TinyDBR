@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "common.h"
+#include "../../common.h"
 #include "x86_helpers.h"
 
 xed_reg_enum_t GetUnusedRegister(xed_reg_enum_t used_register, int operand_width) {

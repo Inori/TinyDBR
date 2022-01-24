@@ -104,7 +104,7 @@ void WinUnwindData::CommitLastTranslated() {
 }
 
 void WinUnwindGenerator::OnModuleInstrumented(ModuleInfo* module) {
-  if (tinyinst_.child_ptr_size == 4) {
+  if (tinydbr_.child_ptr_size == 4) {
     FATAL("-generate_unwind is unneeded (and thus incompatible) with 32-bit targets");
   }
 
@@ -115,7 +115,7 @@ void WinUnwindGenerator::OnModuleInstrumented(ModuleInfo* module) {
   // TODO (ifratric) can this fail for some modules?
   size_t image_size = module->max_address - module->min_address;
   BYTE* modulebuf = (BYTE*)malloc(image_size);
-  tinyinst_.RemoteRead((void *)module->min_address, modulebuf, image_size);
+  tinydbr_.RemoteRead((void *)module->min_address, modulebuf, image_size);
 
   DWORD exception_table_offset;
   DWORD exception_table_size;
@@ -170,7 +170,7 @@ void WinUnwindGenerator::OnModuleInstrumented(ModuleInfo* module) {
   }
 
   size_t code_size_after = module->instrumented_code_allocated;
-  tinyinst_.CommitCode(module, code_size_before, (code_size_after - code_size_before));
+  tinydbr_.CommitCode(module, code_size_before, (code_size_after - code_size_before));
 
   free(modulebuf);
 }
@@ -277,7 +277,7 @@ void WinUnwindGenerator::OnModuleUninstrumented(ModuleInfo* module) {
 
 void WinUnwindGenerator::OnModuleLoaded(void* module, char* module_name) {
   if (!strcmp(module_name, "ntdll.dll") && !RtlAddFunctionTable_addr) {
-    DWORD offset = tinyinst_.GetProcOffset((HMODULE)module, "RtlAddFunctionTable");
+    DWORD offset = tinydbr_.GetProcOffset((HMODULE)module, "RtlAddFunctionTable");
     if (!offset) {
       FATAL("Error locating RtlAddFunctionTable");
     }
@@ -293,13 +293,13 @@ void WinUnwindGenerator::WriteHandler(ModuleInfo* module, size_t original_handle
     return;
   }
 
-  size_t handler_address = tinyinst_.GetCurrentInstrumentedAddress(module);
+  size_t handler_address = tinydbr_.GetCurrentInstrumentedAddress(module);
 
   data->handler_start_breakpoints[handler_address] = original_handler;
-  tinyinst_.assembler_->Breakpoint(module);
+  tinydbr_.assembler_->Breakpoint(module);
 
   unsigned char ret = 0xC3;
-  tinyinst_.WriteCode(module, &ret, sizeof(ret));
+  tinydbr_.WriteCode(module, &ret, sizeof(ret));
 
   data->translated_handler_map[original_handler] = handler_address;
 }
@@ -395,7 +395,7 @@ DWORD WinUnwindGenerator::WriteUnwindInfo(ModuleInfo* module, UnwindInfo* info) 
   if (offset % sizeof(DWORD)) {
     int padding_bytes = sizeof(DWORD) - (offset % sizeof(DWORD));
     char padding[] = { 0, 0, 0, 0 };
-    tinyinst_.WriteCode(module, padding, padding_bytes);
+    tinydbr_.WriteCode(module, padding, padding_bytes);
     offset += padding_bytes;
   }
 
@@ -407,34 +407,34 @@ DWORD WinUnwindGenerator::WriteUnwindInfo(ModuleInfo* module, UnwindInfo* info) 
   }
 
   BYTE flags = info->version_flags;
-  tinyinst_.WriteCode(module, &flags, sizeof(flags));
+  tinydbr_.WriteCode(module, &flags, sizeof(flags));
 
   BYTE prolog = info->prolog_size;
-  tinyinst_.WriteCode(module, &prolog, sizeof(prolog));
+  tinydbr_.WriteCode(module, &prolog, sizeof(prolog));
 
   BYTE count = (BYTE)info->unwind_codes.size();
-  tinyinst_.WriteCode(module, &count, sizeof(count));
+  tinydbr_.WriteCode(module, &count, sizeof(count));
 
-  tinyinst_.WriteCode(module, &info->frame_register, sizeof(info->frame_register));
+  tinydbr_.WriteCode(module, &info->frame_register, sizeof(info->frame_register));
 
   // unwind code array
   if (!info->unwind_codes.empty()) {
-    tinyinst_.WriteCode(module, &(info->unwind_codes[0]), info->unwind_codes.size() * sizeof(info->unwind_codes[0]));
+    tinydbr_.WriteCode(module, &(info->unwind_codes[0]), info->unwind_codes.size() * sizeof(info->unwind_codes[0]));
   }
 
   // padding
   if (info->unwind_codes.size() % 2) {
     USHORT padding = 0;
-    tinyinst_.WriteCode(module, &padding, sizeof(padding));
+    tinydbr_.WriteCode(module, &padding, sizeof(padding));
   }
 
   if (info->handler) {
     size_t translated_handler = data->translated_handler_map[info->handler];
     DWORD handler_offset = (DWORD)(translated_handler - (size_t)module->instrumented_code_remote);
-    tinyinst_.WriteCode(module, &handler_offset, sizeof(handler_offset));
+    tinydbr_.WriteCode(module, &handler_offset, sizeof(handler_offset));
 
     // in our case, the handler data is going to be a pointer to the original handler data
-    tinyinst_.WritePointer(module, info->handler_data);
+    tinydbr_.WritePointer(module, info->handler_data);
   }
 
   return offset;
@@ -448,28 +448,28 @@ void WinUnwindGenerator::WriteFunctionInfo(ModuleInfo* module, FunctionInfo* inf
   functionTable->num_entries++;
   DWORD start_offset = (DWORD)(info->function_start - (size_t)module->instrumented_code_remote);
   DWORD end_offset = (DWORD)(info->function_end - (size_t)module->instrumented_code_remote);
-  tinyinst_.WriteCodeAtOffset(module, functionTable->offset, &start_offset, sizeof(DWORD));
+  tinydbr_.WriteCodeAtOffset(module, functionTable->offset, &start_offset, sizeof(DWORD));
   functionTable->offset += sizeof(DWORD);
-  tinyinst_.WriteCodeAtOffset(module, functionTable->offset, &end_offset, sizeof(DWORD));
+  tinydbr_.WriteCodeAtOffset(module, functionTable->offset, &end_offset, sizeof(DWORD));
   functionTable->offset += sizeof(DWORD);
-  tinyinst_.WriteCodeAtOffset(module, functionTable->offset, &info->unwind_info->translated_offset, sizeof(DWORD));
+  tinydbr_.WriteCodeAtOffset(module, functionTable->offset, &info->unwind_info->translated_offset, sizeof(DWORD));
   functionTable->offset += sizeof(DWORD);
 }
 
 size_t WinUnwindGenerator::WriteFunctionTable(ModuleInfo* module, FunctionTable& functionTable, size_t max_entries) {
   if (functionTable.addr) return functionTable.addr;
 
-  size_t function_table_addr = tinyinst_.GetCurrentInstrumentedAddress(module);
+  size_t function_table_addr = tinydbr_.GetCurrentInstrumentedAddress(module);
 
   // must be DWORD aligned
   if (function_table_addr % sizeof(DWORD)) {
     int padding_bytes = sizeof(DWORD) - (function_table_addr % sizeof(DWORD));
     char padding[] = { 0, 0, 0, 0 };
-    tinyinst_.WriteCode(module, padding, padding_bytes);
+    tinydbr_.WriteCode(module, padding, padding_bytes);
     function_table_addr += padding_bytes;
   }
 
-  function_table_addr = tinyinst_.GetCurrentInstrumentedAddress(module);
+  function_table_addr = tinydbr_.GetCurrentInstrumentedAddress(module);
   size_t function_table_offset = module->instrumented_code_allocated;
 
   size_t buf_size = max_entries * sizeof(DWORD) * 3;
@@ -484,7 +484,7 @@ size_t WinUnwindGenerator::WriteFunctionTable(ModuleInfo* module, FunctionTable&
     *cur = 0xFFFFFFFF; cur++;
   }
 
-  tinyinst_.WriteCode(module, buf, buf_size);
+  tinydbr_.WriteCode(module, buf, buf_size);
 
   free(buf);
 
@@ -513,7 +513,7 @@ size_t WinUnwindGenerator::MaybeRedirectExecution(ModuleInfo* module, size_t IP)
   }
   size_t function_table_new_offset = unwind_data->function_table.offset;
   if (function_table_old_offset != function_table_new_offset) {
-    tinyinst_.CommitCode(module, function_table_old_offset, function_table_new_offset - function_table_old_offset);
+    tinydbr_.CommitCode(module, function_table_old_offset, function_table_new_offset - function_table_old_offset);
   }
 
   unwind_data->translated_infos.clear();
@@ -522,7 +522,7 @@ size_t WinUnwindGenerator::MaybeRedirectExecution(ModuleInfo* module, size_t IP)
     // compute how much data we wrote and commit it all to the target process
     size_t code_size_after = module->instrumented_code_allocated;
     if (code_size_after != code_size_before) {
-      tinyinst_.CommitCode(module, code_size_before, (code_size_after - code_size_before));
+      tinydbr_.CommitCode(module, code_size_before, (code_size_after - code_size_before));
     }
 
     return IP;
@@ -532,9 +532,9 @@ size_t WinUnwindGenerator::MaybeRedirectExecution(ModuleInfo* module, size_t IP)
     FATAL("Need to register unwind info but the address of RtlAddFunctionTable is unknown");
   }
 
-  size_t continue_address = tinyinst_.GetCurrentInstrumentedAddress(module);
+  size_t continue_address = tinydbr_.GetCurrentInstrumentedAddress(module);
 
-  tinyinst_.assembler_->OffsetStack(module, -tinyinst_.sp_offset);
+  tinydbr_.assembler_->OffsetStack(module, -tinydbr_.sp_offset);
 
   unsigned char register_assembly_part1[] = {
     // push flags and volatile registers
@@ -555,11 +555,11 @@ size_t WinUnwindGenerator::MaybeRedirectExecution(ModuleInfo* module, size_t IP)
     0xE9, 0x20, 0x00, 0x00, 0x00, // jmp 0x18
   };
 
-  tinyinst_.WriteCode(module, register_assembly_part1, sizeof(register_assembly_part1));
-  tinyinst_.WritePointer(module, RtlAddFunctionTable_addr);
-  tinyinst_.WritePointer(module, function_table_addr);
-  tinyinst_.WritePointer(module, (size_t)module->instrumented_code_remote);
-  tinyinst_.WritePointer(module, max_function_table_size);
+  tinydbr_.WriteCode(module, register_assembly_part1, sizeof(register_assembly_part1));
+  tinydbr_.WritePointer(module, RtlAddFunctionTable_addr);
+  tinydbr_.WritePointer(module, function_table_addr);
+  tinydbr_.WritePointer(module, (size_t)module->instrumented_code_remote);
+  tinydbr_.WritePointer(module, max_function_table_size);
 
   unsigned char register_assembly_part2[] = {
     // allocate shadow space
@@ -575,18 +575,18 @@ size_t WinUnwindGenerator::MaybeRedirectExecution(ModuleInfo* module, size_t IP)
     0x41, 0x5B, 0x41, 0x5A, 0x41, 0x59, 0x41, 0x58, 0x5A, 0x59, 0x58, 0x9D
   };
 
-  tinyinst_.WriteCode(module, register_assembly_part2, sizeof(register_assembly_part2));
+  tinydbr_.WriteCode(module, register_assembly_part2, sizeof(register_assembly_part2));
 
-  tinyinst_.assembler_->OffsetStack(module, tinyinst_.sp_offset);
+  tinydbr_.assembler_->OffsetStack(module, tinydbr_.sp_offset);
 
-  unwind_data->register_breakpoint = tinyinst_.GetCurrentInstrumentedAddress(module);
-  tinyinst_.assembler_->Breakpoint(module);
+  unwind_data->register_breakpoint = tinydbr_.GetCurrentInstrumentedAddress(module);
+  tinydbr_.assembler_->Breakpoint(module);
   unwind_data->register_continue_IP = IP;
-  tinyinst_.SaveRegisters(&unwind_data->register_saved_registers);
+  tinydbr_.SaveRegisters(&unwind_data->register_saved_registers);
 
   // compute how much data we wrote and commit it all to the target process
   size_t code_size_after = module->instrumented_code_allocated;
-  tinyinst_.CommitCode(module, code_size_before, (code_size_after - code_size_before));
+  tinydbr_.CommitCode(module, code_size_before, (code_size_after - code_size_before));
 
   unwind_data->table_registered = true;
 
@@ -600,8 +600,8 @@ bool WinUnwindGenerator::HandleBreakpoint(ModuleInfo* module, void* address) {
   if (size_t(address) == unwind_data->register_breakpoint) {
     // size_t rax = tinyinst_.GetRegister(RAX);
     // printf("Registration complete, rax: %zx\n", rax);
-    tinyinst_.RestoreRegisters(&unwind_data->register_saved_registers);
-    tinyinst_.SetRegister(RIP, unwind_data->register_continue_IP);
+    tinydbr_.RestoreRegisters(&unwind_data->register_saved_registers);
+    tinydbr_.SetRegister(RIP, unwind_data->register_continue_IP);
     return true;
   }
 
@@ -609,10 +609,10 @@ bool WinUnwindGenerator::HandleBreakpoint(ModuleInfo* module, void* address) {
   if (handler_iter != unwind_data->handler_start_breakpoints.end()) {
     // printf("handler start breakpoint\n");
 
-    PDISPATCHER_CONTEXT pdispatcher_context = (PDISPATCHER_CONTEXT)tinyinst_.GetRegister(R9);
+    PDISPATCHER_CONTEXT pdispatcher_context = (PDISPATCHER_CONTEXT)tinydbr_.GetRegister(R9);
     DISPATCHER_CONTEXT dispatcher_context;
  
-    tinyinst_.RemoteRead((void*)pdispatcher_context, &dispatcher_context, sizeof(dispatcher_context));
+    tinydbr_.RemoteRead((void*)pdispatcher_context, &dispatcher_context, sizeof(dispatcher_context));
 
     auto iter = unwind_data->return_addresses.find(dispatcher_context.ControlPc);
     if (iter == unwind_data->return_addresses.end()) {
@@ -641,10 +641,10 @@ bool WinUnwindGenerator::HandleBreakpoint(ModuleInfo* module, void* address) {
       dispatcher_context.FunctionEntry = (PRUNTIME_FUNCTION)original_function_info->function_info_addr;
     }
 
-    tinyinst_.RemoteWrite((void*)pdispatcher_context, &dispatcher_context, sizeof(dispatcher_context));
+    tinydbr_.RemoteWrite((void*)pdispatcher_context, &dispatcher_context, sizeof(dispatcher_context));
 
     // redirect execution to the corresponding original handler
-    tinyinst_.SetRegister(RIP, handler_iter->second);
+    tinydbr_.SetRegister(RIP, handler_iter->second);
     return true;
   }
 

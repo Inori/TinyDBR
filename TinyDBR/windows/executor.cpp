@@ -70,7 +70,7 @@ void Executor::OnModuleUnloaded(void* module)
 
 bool Executor::OnException(Exception* exception_record)
 {
-
+	return true;
 }
 
 void Executor::OnCrashed(Exception* exception_record)
@@ -80,7 +80,7 @@ void Executor::OnCrashed(Exception* exception_record)
 
 size_t Executor::GetTranslatedAddress(size_t address)
 {
-
+	return 0;
 }
 
 // detects executable memory regions in the module
@@ -508,6 +508,208 @@ void Executor::RemoteProtect(void* address, size_t size, MemoryProtection protec
 	{
 		FATAL("Could not apply memory protection");
 	}
+}
+
+size_t Executor::GetRegister(Register r)
+{
+	CONTEXT lcContext = {};
+	GetThreadContext(GetCurrentThread(), &lcContext);
+#ifdef _WIN64
+
+	switch (r)
+	{
+	case RAX:
+		return lcContext.Rax;
+	case RCX:
+		return lcContext.Rcx;
+	case RDX:
+		return lcContext.Rdx;
+	case RBX:
+		return lcContext.Rbx;
+	case RSP:
+		return lcContext.Rsp;
+	case RBP:
+		return lcContext.Rbp;
+	case RSI:
+		return lcContext.Rsi;
+	case RDI:
+		return lcContext.Rdi;
+	case R8:
+		return lcContext.R8;
+	case R9:
+		return lcContext.R9;
+	case R10:
+		return lcContext.R10;
+	case R11:
+		return lcContext.R11;
+	case R12:
+		return lcContext.R12;
+	case R13:
+		return lcContext.R13;
+	case R14:
+		return lcContext.R14;
+	case R15:
+		return lcContext.R15;
+	case RIP:
+		return lcContext.Rip;
+	default:
+		FATAL("Unimplemented");
+	}
+
+#else
+
+	switch (r)
+	{
+	case RAX:
+		return lcContext.Eax;
+	case RCX:
+		return lcContext.Ecx;
+	case RDX:
+		return lcContext.Edx;
+	case RBX:
+		return lcContext.Ebx;
+	case RSP:
+		return lcContext.Esp;
+	case RBP:
+		return lcContext.Ebp;
+	case RSI:
+		return lcContext.Esi;
+	case RDI:
+		return lcContext.Edi;
+	case RIP:
+		return lcContext.Eip;
+	default:
+		FATAL("Unimplemented");
+	}
+
+#endif
+}
+
+void Executor::SetRegister(Register r, size_t value)
+{
+	CONTEXT lcContext = {};
+	GetThreadContext(GetCurrentThread(), &lcContext);
+#ifdef _WIN64
+
+	switch (r)
+	{
+	case RAX:
+		lcContext.Rax = value;
+		break;
+	case RCX:
+		lcContext.Rcx = value;
+		break;
+	case RDX:
+		lcContext.Rdx = value;
+		break;
+	case RBX:
+		lcContext.Rbx = value;
+		break;
+	case RSP:
+		lcContext.Rsp = value;
+		break;
+	case RBP:
+		lcContext.Rbp = value;
+		break;
+	case RSI:
+		lcContext.Rsi = value;
+		break;
+	case RDI:
+		lcContext.Rdi = value;
+		break;
+	case R8:
+		lcContext.R8 = value;
+		break;
+	case R9:
+		lcContext.R9 = value;
+		break;
+	case R10:
+		lcContext.R10 = value;
+		break;
+	case R11:
+		lcContext.R11 = value;
+		break;
+	case R12:
+		lcContext.R12 = value;
+		break;
+	case R13:
+		lcContext.R13 = value;
+		break;
+	case R14:
+		lcContext.R14 = value;
+		break;
+	case R15:
+		lcContext.R15 = value;
+		break;
+	case RIP:
+		lcContext.Rip = value;
+		break;
+	default:
+		FATAL("Unimplemented");
+	}
+
+#else
+
+	switch (r)
+	{
+	case RAX:
+		lcContext.Eax = value;
+		break;
+	case RCX:
+		lcContext.Ecx = value;
+		break;
+	case RDX:
+		lcContext.Edx = value;
+		break;
+	case RBX:
+		lcContext.Ebx = value;
+		break;
+	case RSP:
+		lcContext.Esp = value;
+		break;
+	case RBP:
+		lcContext.Ebp = value;
+		break;
+	case RSI:
+		lcContext.Esi = value;
+		break;
+	case RDI:
+		lcContext.Edi = value;
+		break;
+	case RIP:
+		lcContext.Eip = value;
+		break;
+	default:
+		FATAL("Unimplemented");
+	}
+
+#endif
+
+	SetThreadContext(GetCurrentThread(), &lcContext);
+}
+
+void Executor::SaveRegisters(SavedRegisters* registers)
+{
+	CONTEXT lcContext = {};
+	GetThreadContext(GetCurrentThread(), &lcContext);
+	memcpy(&registers->saved_context, &lcContext, sizeof(registers->saved_context));
+}
+
+void Executor::RestoreRegisters(SavedRegisters* registers)
+{
+	if (!SetThreadContext(GetCurrentThread(), &registers->saved_context)) 
+	{
+		FATAL("Error restoring registers");
+	}
+}
+
+DWORD Executor::GetProcOffset(HMODULE module, const char* name)
+{
+	void* proc_address = GetProcAddress(module, name);
+	DWORD offset = 
+		static_cast<DWORD>(
+			reinterpret_cast<uintptr_t>(proc_address) - reinterpret_cast<uintptr_t>(module));
+	return offset;
 }
 
 // Gets the registered safe exception handlers for the module

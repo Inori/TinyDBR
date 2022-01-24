@@ -27,7 +27,7 @@ public:
 
 class UnwindGenerator {
 public:
-  UnwindGenerator(TinyDBR& tinyinst) : tinyinst_(tinyinst) {}
+  UnwindGenerator(TinyDBR& tinyinst) : tinydbr_(tinyinst) {}
   virtual ~UnwindGenerator() = default;
   
   virtual void Init() {}
@@ -63,7 +63,7 @@ public:
   virtual bool Is64BitOnly() { return false; }
 
 protected:
-	TinyDBR& tinyinst_;
+	TinyDBR& tinydbr_;
 };
 
 #endif // UNWIND_H

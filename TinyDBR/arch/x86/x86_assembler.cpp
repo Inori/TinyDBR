@@ -278,7 +278,7 @@ void X86Assembler::TranslateJmp(ModuleInfo *module,
 void X86Assembler::InstrumentRet(ModuleInfo *module,
                                  Instruction &inst,
                                  size_t instruction_address,
-                                 TinyInst::IndirectInstrumentation mode,
+                                 TinyDBR::IndirectInstrumentation mode,
                                  size_t bb_address) {
   // lots of moving around, but the problem is
   // we need to store context in the same place
@@ -715,12 +715,12 @@ void X86Assembler::HandleBasicBlockEnd(
   xed_error_enum_t xed_error;
   xed_category_enum_t category = xed_decoded_inst_get_category(&inst.xedd);
   if (category == XED_CATEGORY_RET) {
-    TinyInst::IndirectInstrumentation ii_mode =
+    TinyDBR::IndirectInstrumentation ii_mode =
       tinyinst_.ShouldInstrumentIndirect(module,
                                          inst,
                                          (size_t)address + last_offset);
 
-    if (ii_mode != TinyInst::IndirectInstrumentation::II_NONE) {
+    if (ii_mode != TinyDBR::IndirectInstrumentation::II_NONE) {
       InstrumentRet(module, inst, (size_t)address + last_offset, ii_mode,
                     (size_t)address);
     } else {
@@ -869,12 +869,12 @@ void X86Assembler::HandleBasicBlockEnd(
           offset_fixes);
 
     } else {
-      TinyInst::IndirectInstrumentation ii_mode =
+      TinyDBR::IndirectInstrumentation ii_mode =
         tinyinst_.ShouldInstrumentIndirect(module,
                                            inst,
                                            (size_t)address + last_offset);
 
-      if (ii_mode != TinyInst::IndirectInstrumentation::II_NONE) {
+      if (ii_mode != TinyDBR::IndirectInstrumentation::II_NONE) {
         tinyinst_.InstrumentIndirect(module, inst,
                                      (size_t)address + last_offset, ii_mode,
                                      (size_t)address);
@@ -972,12 +972,12 @@ void X86Assembler::HandleBasicBlockEnd(
     } else /* CALL, operand_name != XED_OPERAND_RELBR */ {
       const char *return_address = address + offset;
 
-      TinyInst::IndirectInstrumentation ii_mode =
+      TinyDBR::IndirectInstrumentation ii_mode =
         tinyinst_.ShouldInstrumentIndirect(module,
                                            inst,
                                            (size_t)address + last_offset);
 
-      if (ii_mode != TinyInst::IndirectInstrumentation::II_NONE) {
+      if (ii_mode != TinyDBR::IndirectInstrumentation::II_NONE) {
         if (tinyinst_.patch_return_addresses) {
           PushReturnAddress(module, (uint64_t)return_address);
 

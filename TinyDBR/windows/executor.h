@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include "../singleton.h"
 #include "../common.h"
+#include "../arch/x86/reg.h"
 
 struct _EXCEPTION_POINTERS;
 
@@ -125,8 +126,13 @@ protected:
 	void  RemoteRead(void* address, void* buffer, size_t size);
 	void  RemoteProtect(void* address, size_t size, MemoryProtection protect);
 
-	  size_t GetRegister(Register r);
+	size_t GetRegister(Register r);
 	void   SetRegister(Register r, size_t value);
+
+	void SaveRegisters(SavedRegisters* registers);
+	void RestoreRegisters(SavedRegisters* registers);
+
+	DWORD GetProcOffset(HMODULE module, const char* name);
 
 protected:
 	int32_t child_ptr_size = sizeof(void*);
@@ -157,6 +163,7 @@ private:
 	void*  veh_handle             = nullptr;
 	size_t allocation_granularity = 0;
 	HANDLE self_handle            = NULL;
+	bool   have_thread_context    = false;
 };
 
 

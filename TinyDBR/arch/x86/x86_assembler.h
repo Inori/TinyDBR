@@ -21,8 +21,8 @@ extern "C" {
 #include "xed/xed-interface.h"
 }
 
-#include "assembler.h"
-#include "tinydbr.h"
+#include "..\..\assembler.h"
+#include "..\..\tinydbr.h"
 
 class X86Assembler : public Assembler {
  public:
@@ -85,7 +85,7 @@ class X86Assembler : public Assembler {
   void InstrumentRet(ModuleInfo *module,
                      Instruction &inst,
                      size_t instruction_address,
-                     TinyInst::IndirectInstrumentation mode,
+                     TinyDBR::IndirectInstrumentation mode,
                      size_t bb_address);
   void PushReturnAddress(ModuleInfo *module, uint64_t return_address);
 

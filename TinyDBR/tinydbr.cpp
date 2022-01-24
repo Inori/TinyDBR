@@ -519,15 +519,6 @@ void TinyDBR::TranslateBasicBlock(char *address,
     size_t breakpoint_address = GetCurrentInstrumentedAddress(module);
     assembler_->Breakpoint(module);
     module->tracepoints[breakpoint_address] = (size_t)address;
-  } else if (GetTargetMethodAddress()) {
-    // hack, allow 1 or 4 byte of unused space at the beginning
-    // of the target method. This is needed because we
-    // are setting a brekpoint here. If this breakpoint falls
-    // into code inserted by the client, and the client modifies
-    // that code later, we loose the breakpoint.
-    if(GetTargetMethodAddress() == address) {
-      assembler_->Nop(module);
-    }
   }
 
   // write pre-bb instrumentation
@@ -1134,7 +1125,7 @@ void TinyDBR::Init() {
   //  instrumented_modules.push_back(new_module);
   //}
 
-  char *option;
+  //char *option;
 
   indirect_instrumentation_mode = II_AUTO;
   //option = GetOption("-indirect_instrumentation", argc, argv);
