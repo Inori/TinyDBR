@@ -72,6 +72,8 @@ struct AddressRange
 // gets time in milliseconds
 uint64_t GetCurTime(void);
 
+void* GetModuleEntrypoint(void* base_address);
+
 #if 0
 
 char *GetOption(const char *name, int argc, char** argv);

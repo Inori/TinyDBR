@@ -1,6 +1,8 @@
 #include "executor.h"
+#include "../tinydbr.h"
 
 #include <Windows.h>
+#include <Psapi.h>
 
 Executor::Executor()
 {
@@ -10,7 +12,7 @@ Executor::~Executor()
 {
 }
 
-void Executor::Init()
+void Executor::Init(const std::vector<std::string>& instrument_module_names)
 {
 	veh_handle = InstallVEHHandler();
 
@@ -36,46 +38,71 @@ void Executor::Unit()
 	}
 }
 
-//bool Executor::AddMoudle(const CodeModule& mod)
-//{
-//	modules.emplace_back(mod);
-//
-//	return SetModuleCodeNX(mod);
-//}
+long Executor::OnVEHException(EXCEPTION_POINTERS* ExceptionInfo)
+{
+	LONG action = EXCEPTION_CONTINUE_SEARCH;
+	do
+	{
+		Exception exception = {};
+		ConvertException(ExceptionInfo->ExceptionRecord, &exception);
+
+		bool handled = OnException(&exception);
+
+		if (handled)
+		{
+			action = EXCEPTION_CONTINUE_EXECUTION;
+		}
+
+	} while (false);
+
+	return action;
+}
 
 void Executor::OnEntrypoint()
 {
+	HMODULE* module_handles = NULL;
+	DWORD    num_modules    = GetLoadedModules(&module_handles);
+	for (DWORD i = 0; i < num_modules; i++)
+	{
+		char base_name[MAX_PATH];
+		GetModuleBaseNameA(self_handle, module_handles[i], (LPSTR)(&base_name), sizeof(base_name));
+		if (trace_debug_events)
+			printf("Debugger: Loaded module %s at %p\n", base_name, (void*)module_handles[i]);
+		OnModuleLoaded((void*)module_handles[i], base_name);
+	}
+	if (module_handles)
+		free(module_handles);
 
+	child_entrypoint_reached = true;
+
+	if (trace_debug_events)
+		printf("Debugger: Process entrypoint reached\n");
 }
 
 void Executor::OnProcessCreated()
 {
-
 }
 
 void Executor::OnProcessExit()
 {
-
 }
 
 void Executor::OnModuleLoaded(void* module, char* module_name)
 {
-
 }
 
 void Executor::OnModuleUnloaded(void* module)
 {
-
 }
 
+// should return true if the exception has been handled
 bool Executor::OnException(Exception* exception_record)
 {
-	return true;
+	return false;
 }
 
 void Executor::OnCrashed(Exception* exception_record)
 {
-
 }
 
 size_t Executor::GetTranslatedAddress(size_t address)
@@ -86,11 +113,12 @@ size_t Executor::GetTranslatedAddress(size_t address)
 // detects executable memory regions in the module
 // makes them non-executable
 // and copies code out
-void Executor::ExtractCodeRanges(
-	void* module_base, 
-	size_t min_address, size_t max_address, 
+void Executor::ExtractAndProtectCodeRanges(
+	void*                    module_base,
+	size_t                   min_address,
+	size_t                   max_address,
 	std::list<AddressRange>* executable_ranges,
-	size_t* code_size)
+	size_t*                  code_size)
 {
 	LPCVOID                  end_address = (char*)max_address;
 	LPCVOID                  cur_address = module_base;
@@ -377,6 +405,74 @@ DWORD Executor::WindowsProtectionFlags(MemoryProtection protection)
 	}
 }
 
+DWORD Executor::GetLoadedModules(HMODULE** modules)
+{
+	DWORD    module_handle_storage_size = 1024 * sizeof(HMODULE);
+	HMODULE* module_handles             = (HMODULE*)malloc(module_handle_storage_size);
+	DWORD    hmodules_size;
+	while (true)
+	{
+		if (!EnumProcessModulesEx(self_handle,
+								  module_handles,
+								  module_handle_storage_size,
+								  &hmodules_size,
+								  LIST_MODULES_ALL))
+		{
+			FATAL("EnumProcessModules failed, %x\n", GetLastError());
+		}
+		if (hmodules_size <= module_handle_storage_size)
+			break;
+		module_handle_storage_size *= 2;
+		module_handles = (HMODULE*)realloc(module_handles, module_handle_storage_size);
+	}
+	*modules = module_handles;
+	return hmodules_size / sizeof(HMODULE);
+}
+
+void Executor::ConvertException(
+	EXCEPTION_RECORD* win_exception_record,
+	Exception*        exception)
+{
+	switch (win_exception_record->ExceptionCode)
+	{
+	case EXCEPTION_BREAKPOINT:
+	case 0x4000001f:
+		exception->type = BREAKPOINT;
+		break;
+	case EXCEPTION_ACCESS_VIOLATION:
+		exception->type = ACCESS_VIOLATION;
+		break;
+	case EXCEPTION_ILLEGAL_INSTRUCTION:
+		exception->type = ILLEGAL_INSTRUCTION;
+		break;
+	case EXCEPTION_STACK_OVERFLOW:
+		exception->type = STACK_OVERFLOW;
+		break;
+	default:
+		exception->type = OTHER;
+		break;
+	}
+
+	exception->ip = win_exception_record->ExceptionAddress;
+
+	exception->maybe_execute_violation = false;
+	exception->maybe_write_violation   = false;
+	exception->access_address          = 0;
+	if (win_exception_record->ExceptionCode == EXCEPTION_ACCESS_VIOLATION)
+	{
+		if (win_exception_record->ExceptionInformation[0] == 8)
+		{
+			exception->maybe_execute_violation = true;
+		}
+		if (win_exception_record->ExceptionInformation[0] == 1)
+		{
+			exception->maybe_write_violation = true;
+		}
+
+		exception->access_address = (void*)(win_exception_record->ExceptionInformation[1]);
+	}
+}
+
 void* Executor::RemoteAllocateNear(
 	uint64_t         region_min,
 	uint64_t         region_max,
@@ -447,9 +543,9 @@ void Executor::RemoteWrite(void* address, void* buffer, size_t size)
 		return;
 	}
 
-	// we need to 
+	// we need to
 	// (a) read page permissions
-	// (b) make it writable, and 
+	// (b) make it writable, and
 	// (c) restore permissions
 	DWORD oldProtect;
 	if (!VirtualProtectEx(self_handle,
@@ -697,7 +793,7 @@ void Executor::SaveRegisters(SavedRegisters* registers)
 
 void Executor::RestoreRegisters(SavedRegisters* registers)
 {
-	if (!SetThreadContext(GetCurrentThread(), &registers->saved_context)) 
+	if (!SetThreadContext(GetCurrentThread(), &registers->saved_context))
 	{
 		FATAL("Error restoring registers");
 	}
@@ -706,7 +802,7 @@ void Executor::RestoreRegisters(SavedRegisters* registers)
 DWORD Executor::GetProcOffset(HMODULE module, const char* name)
 {
 	void* proc_address = GetProcAddress(module, name);
-	DWORD offset = 
+	DWORD offset =
 		static_cast<DWORD>(
 			reinterpret_cast<uintptr_t>(proc_address) - reinterpret_cast<uintptr_t>(module));
 	return offset;
@@ -721,7 +817,7 @@ void Executor::GetExceptionHandlers(size_t module_header, std::unordered_set<siz
 
 	DWORD size_of_image = GetImageSize((void*)module_header);
 
-	char*  modulebuf = (char*)malloc(size_of_image);
+	char* modulebuf = (char*)malloc(size_of_image);
 	std::memcpy(modulebuf, (void*)module_header, size_of_image);
 
 	DWORD pe_offset;
@@ -826,49 +922,6 @@ void Executor::PatchPointersRemote(size_t min_address, size_t max_address, std::
 	}
 }
 
-//bool Executor::SetModuleCodeNX(const CodeModule& mod)
-//{
-//	bool ret = false;
-//	do
-//	{
-//		if (mod.code_ranges.empty())
-//		{
-//			break;
-//		}
-//
-//		bool has_error = false;
-//		for (const auto& range : mod.code_ranges)
-//		{
-//			if (!range.address || !range.size)
-//			{
-//				has_error = true;
-//				break;
-//			}
-//
-//			// TODO:
-//			// To support multiple platform, this protect function should be abstracted.
-//
-//			// Since we need to read the original code and rewrite it, 
-//			// we just need to remove the EXEC property and keep it readable.
-//			DWORD old_protect = 0;
-//			BOOL bRet = VirtualProtect(range.address, range.size, PAGE_READONLY, &old_protect);
-//			if (!bRet)
-//			{
-//				has_error = true;
-//				break;
-//			}
-//		}
-//
-//		if (has_error)
-//		{
-//			break;
-//		}
-//
-//		ret  = true;
-//	}while(false);
-//	return ret;
-//}
-
 void* Executor::InstallVEHHandler()
 {
 	void* handle = AddVectoredExceptionHandler(TRUE, &Executor::VectoredExceptionHandler);
@@ -877,7 +930,7 @@ void* Executor::InstallVEHHandler()
 
 void Executor::UninstallVEHHandler(void* handle)
 {
-	do 
+	do
 	{
 		if (!handle)
 		{
@@ -889,17 +942,18 @@ void Executor::UninstallVEHHandler(void* handle)
 	} while (false);
 }
 
-LONG Executor::VectoredExceptionHandler(_EXCEPTION_POINTERS* ExceptionInfo)
+LONG WINAPI Executor::VectoredExceptionHandler(EXCEPTION_POINTERS* ExceptionInfo)
 {
 	LONG action = EXCEPTION_CONTINUE_SEARCH;
-
-	do 
+	do
 	{
-		if (!ExceptionInfo)
+		auto executor = TinyDBR::GetInstance();
+		if (!executor)
 		{
 			break;
 		}
 
+		action = executor->OnVEHException(ExceptionInfo);
 
 	} while (false);
 

@@ -14,17 +14,43 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <stdio.h>
-#include <inttypes.h>
-#include <list>
-#include <chrono>
-
 #include "common.h"
 
-uint64_t GetCurTime(void) {
-  auto duration =  std::chrono::system_clock::now().time_since_epoch();
-  auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-  return millis;
+#include <chrono>
+#include <inttypes.h>
+#include <list>
+#include <stdio.h>
+
+uint64_t GetCurTime(void)
+{
+	auto duration = std::chrono::system_clock::now().time_since_epoch();
+	auto millis   = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+	return millis;
+}
+
+void* GetModuleEntrypoint(void* base_address)
+{
+	unsigned char headers[4096];
+	std::memcpy(headers, base_address, 4096);
+
+	DWORD pe_offset;
+	pe_offset                = *((DWORD*)(headers + 0x3C));
+	unsigned char* pe        = headers + pe_offset;
+	DWORD          signature = *((DWORD*)pe);
+	if (signature != 0x00004550)
+	{
+		FATAL("PE signature error\n");
+	}
+	pe         = pe + 0x18;
+	WORD magic = *((WORD*)pe);
+	if ((magic != 0x10b) && (magic != 0x20b))
+	{
+		FATAL("Unknown PE magic value\n");
+	}
+	DWORD entrypoint_offset = *((DWORD*)(pe + 16));
+	if (entrypoint_offset == 0)
+		return NULL;
+	return (char*)base_address + entrypoint_offset;
 }
 
 #if 0

@@ -1,29 +1,35 @@
 #pragma once
 
-#include <vector>
-#include <string>
-#include <list>
-#include <unordered_set>
-#include <unordered_map>
-#include "../singleton.h"
-#include "../common.h"
 #include "../arch/x86/reg.h"
+#include "../common.h"
+#include "../singleton.h"
 
-struct _EXCEPTION_POINTERS;
+#include <list>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+typedef struct _EXCEPTION_RECORD   EXCEPTION_RECORD;
+typedef struct _EXCEPTION_POINTERS EXCEPTION_POINTERS;
+
+class TinyDBR;
+
 
 struct SavedRegisters
 {
 	CONTEXT saved_context;
 };
 
-class Executor : public Singleton<Executor>
+class Executor : public Singleton<TinyDBR>
 {
-	friend class Singleton<Executor>;
+	friend class Singleton<TinyDBR>;
+
 public:
 	Executor();
 	virtual ~Executor();
 
-	virtual void Init();
+	virtual void Init(const std::vector<std::string>& instrument_module_names);
 
 	virtual void Unit();
 
@@ -37,27 +43,24 @@ public:
 		bool ret = false;
 		do
 		{
-			// TODO:
-			// Check if the code is within added modules.
 			if (!code)
 			{
 				break;
 			}
 
-			FuncTy func = reinterpret_cast<FuncTy>(code);
-			int ret_val = func(args...);
+			FuncTy func    = reinterpret_cast<FuncTy>(code);
+			int    ret_val = func(args...);
 
-			ret  = true;
-		}while(false);
+			ret = true;
+		} while (false);
 		return ret;
-
 	}
 
-	// bool AddMoudle(const CodeModule& mod);
+	long OnVEHException(EXCEPTION_POINTERS* ExceptionInfo);
 
 protected:
-
-	enum ExceptionType {
+	enum ExceptionType
+	{
 		BREAKPOINT,
 		ACCESS_VIOLATION,
 		ILLEGAL_INSTRUCTION,
@@ -65,12 +68,13 @@ protected:
 		OTHER
 	};
 
-	struct Exception {
+	struct Exception
+	{
 		ExceptionType type;
-		void* ip;
-		bool maybe_write_violation;
-		bool maybe_execute_violation;
-		void* access_address;
+		void*         ip;
+		bool          maybe_write_violation;
+		bool          maybe_execute_violation;
+		void*         access_address;
 	};
 
 	virtual void OnEntrypoint();
@@ -93,11 +97,11 @@ protected:
 	};
 
 protected:
-	void ExtractCodeRanges(void* module_base,
-		size_t min_address,
-		size_t max_address,
-		std::list<AddressRange>* executable_ranges,
-		size_t* code_size);
+	void ExtractAndProtectCodeRanges(void*                    module_base,
+									 size_t                   min_address,
+									 size_t                   max_address,
+									 std::list<AddressRange>* executable_ranges,
+									 size_t*                  code_size);
 
 	void ProtectCodeRanges(
 		std::list<AddressRange>* executable_ranges);
@@ -108,13 +112,11 @@ protected:
 		 size_t* min_address,
 		 size_t* max_address);
 
-
 	void GetExceptionHandlers(size_t module_haeder, std::unordered_set<size_t>& handlers);
 
 	void PatchPointersRemote(size_t min_address, size_t max_address, std::unordered_map<size_t, size_t>& search_replace);
 	template <typename T>
 	void PatchPointersRemoteT(size_t min_address, size_t max_address, std::unordered_map<size_t, size_t>& search_replace);
-	
 
 	void* RemoteAllocateNear(uint64_t         region_min,
 							 uint64_t         region_max,
@@ -135,17 +137,15 @@ protected:
 	DWORD GetProcOffset(HMODULE module, const char* name);
 
 protected:
-	int32_t child_ptr_size = sizeof(void*);
+	int32_t child_ptr_size           = sizeof(void*);
 	bool    child_entrypoint_reached = false;
 
 private:
-	// bool SetModuleCodeNX(const CodeModule& mod);
-
 	void* InstallVEHHandler();
 
 	void UninstallVEHHandler(void* handle);
 
-	static long VectoredExceptionHandler(_EXCEPTION_POINTERS* ExceptionInfo);
+	static long __stdcall VectoredExceptionHandler(EXCEPTION_POINTERS* ExceptionInfo);
 
 	void* RemoteAllocateBefore(uint64_t         min_address,
 							   uint64_t         max_address,
@@ -159,11 +159,16 @@ private:
 
 	DWORD WindowsProtectionFlags(MemoryProtection protection);
 
+	DWORD GetLoadedModules(HMODULE** modules);
+
+	void ConvertException(EXCEPTION_RECORD* win_exception_record,
+						  Exception*        exception);
+
 private:
 	void*  veh_handle             = nullptr;
 	size_t allocation_granularity = 0;
 	HANDLE self_handle            = NULL;
 	bool   have_thread_context    = false;
+
+	bool trace_debug_events = false;
 };
-
-
