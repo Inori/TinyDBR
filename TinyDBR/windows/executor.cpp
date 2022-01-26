@@ -481,8 +481,10 @@ void Executor::ConvertException(
 	if (win_exception_record->ExceptionCode == EXCEPTION_PRIV_INSTRUCTION)
 	{
 		uint8_t* ip = reinterpret_cast<uint8_t*>(win_exception_record->ExceptionAddress);
-		// 0xF4 is hlt
-		if (ip[0] == 0xF4)
+		// treat hlt as breakpoint instruction.
+		// see comments of BREAKPOINT.
+		const uint8_t hlt_code = 0xF4;
+		if (ip[0] == hlt_code)
 		{
 			exception->type = BREAKPOINT;
 		}
