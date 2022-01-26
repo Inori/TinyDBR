@@ -582,7 +582,7 @@ size_t WinUnwindGenerator::MaybeRedirectExecution(ModuleInfo* module, size_t IP)
   unwind_data->register_breakpoint = tinydbr_.GetCurrentInstrumentedAddress(module);
   tinydbr_.assembler_->Breakpoint(module);
   unwind_data->register_continue_IP = IP;
-  tinydbr_.SaveRegisters(&unwind_data->register_saved_registers);
+  tinydbr_.SaveRegisters(nullptr, &unwind_data->register_saved_registers);
 
   // compute how much data we wrote and commit it all to the target process
   size_t code_size_after = module->instrumented_code_allocated;
@@ -600,8 +600,8 @@ bool WinUnwindGenerator::HandleBreakpoint(ModuleInfo* module, void* address) {
   if (size_t(address) == unwind_data->register_breakpoint) {
     // size_t rax = tinyinst_.GetRegister(RAX);
     // printf("Registration complete, rax: %zx\n", rax);
-    tinydbr_.RestoreRegisters(&unwind_data->register_saved_registers);
-    tinydbr_.SetRegister(RIP, unwind_data->register_continue_IP);
+	  tinydbr_.RestoreRegisters(nullptr, &unwind_data->register_saved_registers);
+	tinydbr_.SetRegister(nullptr, RIP, unwind_data->register_continue_IP);
     return true;
   }
 
@@ -609,7 +609,7 @@ bool WinUnwindGenerator::HandleBreakpoint(ModuleInfo* module, void* address) {
   if (handler_iter != unwind_data->handler_start_breakpoints.end()) {
     // printf("handler start breakpoint\n");
 
-    PDISPATCHER_CONTEXT pdispatcher_context = (PDISPATCHER_CONTEXT)tinydbr_.GetRegister(R9);
+    PDISPATCHER_CONTEXT pdispatcher_context = (PDISPATCHER_CONTEXT)tinydbr_.GetRegister(nullptr, R9);
     DISPATCHER_CONTEXT dispatcher_context;
  
     tinydbr_.RemoteRead((void*)pdispatcher_context, &dispatcher_context, sizeof(dispatcher_context));
@@ -644,7 +644,7 @@ bool WinUnwindGenerator::HandleBreakpoint(ModuleInfo* module, void* address) {
     tinydbr_.RemoteWrite((void*)pdispatcher_context, &dispatcher_context, sizeof(dispatcher_context));
 
     // redirect execution to the corresponding original handler
-    tinydbr_.SetRegister(RIP, handler_iter->second);
+	tinydbr_.SetRegister(nullptr, RIP, handler_iter->second);
     return true;
   }
 

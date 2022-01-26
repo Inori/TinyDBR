@@ -46,7 +46,7 @@ long Executor::OnVEHException(EXCEPTION_POINTERS* ExceptionInfo)
 		Exception exception = {};
 		ConvertException(ExceptionInfo->ExceptionRecord, &exception);
 
-		bool handled = OnException(&exception);
+		bool handled = OnException(&exception, ExceptionInfo->ContextRecord);
 
 		if (handled)
 		{
@@ -96,7 +96,7 @@ void Executor::OnModuleUnloaded(void* module)
 }
 
 // should return true if the exception has been handled
-bool Executor::OnException(Exception* exception_record)
+bool Executor::OnException(Exception* exception_record, Context* context_record)
 {
 	return false;
 }
@@ -437,6 +437,7 @@ void Executor::ConvertException(
 	{
 	case EXCEPTION_BREAKPOINT:
 	case 0x4000001f:
+	case EXCEPTION_PRIV_INSTRUCTION:
 		exception->type = BREAKPOINT;
 		break;
 	case EXCEPTION_ACCESS_VIOLATION:
@@ -606,10 +607,10 @@ void Executor::RemoteProtect(void* address, size_t size, MemoryProtection protec
 	}
 }
 
-size_t Executor::GetRegister(Register r)
+size_t Executor::GetRegister(Context* context, Register r)
 {
-	CONTEXT lcContext = {};
-	GetThreadContext(GetCurrentThread(), &lcContext);
+	CONTEXT& lcContext = *context;
+
 #ifdef _WIN64
 
 	switch (r)
@@ -681,10 +682,10 @@ size_t Executor::GetRegister(Register r)
 #endif
 }
 
-void Executor::SetRegister(Register r, size_t value)
+void Executor::SetRegister(Context* context, Register r, size_t value)
 {
-	CONTEXT lcContext = {};
-	GetThreadContext(GetCurrentThread(), &lcContext);
+	CONTEXT& lcContext = *context;
+
 #ifdef _WIN64
 
 	switch (r)
@@ -780,18 +781,16 @@ void Executor::SetRegister(Register r, size_t value)
 	}
 
 #endif
-
-	SetThreadContext(GetCurrentThread(), &lcContext);
 }
 
-void Executor::SaveRegisters(SavedRegisters* registers)
+void Executor::SaveRegisters(Context* context, SavedRegisters* registers)
 {
 	CONTEXT lcContext = {};
 	GetThreadContext(GetCurrentThread(), &lcContext);
 	memcpy(&registers->saved_context, &lcContext, sizeof(registers->saved_context));
 }
 
-void Executor::RestoreRegisters(SavedRegisters* registers)
+void Executor::RestoreRegisters(Context* context, SavedRegisters* registers)
 {
 	if (!SetThreadContext(GetCurrentThread(), &registers->saved_context))
 	{

@@ -112,7 +112,7 @@ protected:
 	virtual void OnProcessExit() override;
 	virtual void OnModuleLoaded(void* module, char* module_name) override;
 	virtual void OnModuleUnloaded(void* module) override;
-	virtual bool OnException(Exception* exception_record) override;
+	virtual bool OnException(Exception* exception_record, Context* context_record) override;
 	virtual void OnCrashed(Exception* exception_record) override;
 
 	virtual size_t GetTranslatedAddress(size_t address) override;
@@ -122,8 +122,6 @@ protected:
 	void   WritePointer(ModuleInfo* module, size_t value);
 	void   WritePointerAtOffset(ModuleInfo* module, size_t value, size_t offset);
 	size_t ReadPointer(ModuleInfo* module, size_t offset);
-
-	inline void FixDisp4(ModuleInfo* module, int32_t disp);
 
 	size_t GetCurrentInstrumentedAddress(ModuleInfo* module);
 	void   CommitCode(ModuleInfo* module, size_t start_offset, size_t size);
@@ -165,13 +163,13 @@ protected:
 	virtual void     OnReturnAddress(ModuleInfo* module, size_t original_address, size_t translated_address);
 
 private:
-	bool        HandleBreakpoint(void* address);
+	bool HandleBreakpoint(void* address, Context* context);
 	void        OnInstrumentModuleLoaded(void* module, ModuleInfo* target_module);
 	ModuleInfo* IsInstrumentModule(const char* module_name);
 	void        InstrumentAllLoadedModules();
 	void        InstrumentModule(ModuleInfo* module);
 	void        ClearInstrumentation(ModuleInfo* module);
-	bool        TryExecuteInstrumented(char* address);
+	bool        TryExecuteInstrumented(Context* context, char* address);
 	size_t      GetTranslatedAddress(ModuleInfo* module, size_t address);
 	void        TranslateBasicBlock(char*                                     address,
 									ModuleInfo*                               module,
@@ -218,7 +216,7 @@ private:
 							 size_t                 list_head_offset,
 							 IndirectBreakpoinInfo& breakpoint_info,
 							 bool                   global_indirect);
-	bool   HandleIndirectJMPBreakpoint(void* address);
+	bool HandleIndirectJMPBreakpoint(void* address, Context* context);
 
 	void PatchPointersLocal(char* buf, size_t size, std::unordered_map<size_t, size_t>& search_replace, bool commit_code, ModuleInfo* module);
 	template <typename T>
@@ -227,7 +225,6 @@ private:
 	void InstrumentMainModule(const std::string& module_name);
 
 private:
-
 	IndirectInstrumentation indirect_instrumentation_mode;
 
 	bool instrument_cross_module_calls;

@@ -315,7 +315,7 @@ void TinyDBR::FixOffsetOrEnqueue(
 }
 
 // various breakpoints
-bool TinyDBR::HandleBreakpoint(void* address)
+bool TinyDBR::HandleBreakpoint(void* address, Context* context)
 {
 	ModuleInfo* module = GetModuleFromInstrumented((size_t)address);
 	if (!module)
@@ -339,7 +339,7 @@ bool TinyDBR::HandleBreakpoint(void* address)
 	}
 
 	// indirect jump new target
-	if (HandleIndirectJMPBreakpoint(address))
+	if (HandleIndirectJMPBreakpoint(address, context))
 		return true;
 
 	// invalid instruction
@@ -362,7 +362,7 @@ bool TinyDBR::HandleBreakpoint(void* address)
 // handles a breakpoint that occurs
 // when an indirect jump or call wants to go to a previously
 // unseen target
-bool TinyDBR::HandleIndirectJMPBreakpoint(void* address)
+bool TinyDBR::HandleIndirectJMPBreakpoint(void* address, Context* context)
 {
 	if (indirect_instrumentation_mode == II_NONE)
 		return false;
@@ -396,7 +396,7 @@ bool TinyDBR::HandleIndirectJMPBreakpoint(void* address)
 	if (!is_indirect_breakpoint)
 		return false;
 
-	size_t original_address = GetRegister(ORIG_ADDR_REG);
+	size_t original_address = GetRegister(context, ORIG_ADDR_REG);
 
 	// if it's a global indirect, list head must be calculated from target
 	// otherwise it's a per-callsite indirect and the list head was set earlier
@@ -442,7 +442,7 @@ bool TinyDBR::HandleIndirectJMPBreakpoint(void* address)
 	}
 
 	// redirect execution to just created entry which should handle it immediately
-	SetRegister(ARCH_PC, continue_address);
+	SetRegister(context, ARCH_PC, continue_address);
 	return true;
 }
 
@@ -880,7 +880,7 @@ size_t TinyDBR::GetTranslatedAddress(size_t address)
 
 // checks if address falls into one of the instrumented modules
 // and if so, redirects execution to the translated code
-bool TinyDBR::TryExecuteInstrumented(char* address)
+bool TinyDBR::TryExecuteInstrumented(Context* context, char* address)
 {
 	ModuleInfo* module = GetModule((size_t)address);
 
@@ -904,7 +904,7 @@ bool TinyDBR::TryExecuteInstrumented(char* address)
 
 	translated_address = unwind_generator->MaybeRedirectExecution(module, translated_address);
 
-	SetRegister(ARCH_PC, translated_address);
+	SetRegister(context, ARCH_PC, translated_address);
 
 	return true;
 }
@@ -1215,12 +1215,12 @@ void TinyDBR::OnEntrypoint()
 	InstrumentAllLoadedModules();
 }
 
-bool TinyDBR::OnException(Exception* exception_record)
+bool TinyDBR::OnException(Exception* exception_record, Context* context_record)
 {
 	switch (exception_record->type)
 	{
 	case BREAKPOINT:
-		if (HandleBreakpoint(exception_record->ip))
+		if (HandleBreakpoint(exception_record->ip, context_record))
 		{
 			return true;
 		}
@@ -1229,7 +1229,7 @@ bool TinyDBR::OnException(Exception* exception_record)
 		if (exception_record->maybe_execute_violation)
 		{
 			// possibly we are trying to executed code in an instrumented module
-			if (TryExecuteInstrumented((char*)exception_record->access_address))
+			if (TryExecuteInstrumented(context_record, (char*)exception_record->access_address))
 			{
 				return true;
 			}

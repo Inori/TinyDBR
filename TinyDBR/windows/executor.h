@@ -77,12 +77,14 @@ protected:
 		void*         access_address;
 	};
 
+	using Context = ::CONTEXT;
+
 	virtual void OnEntrypoint();
 	virtual void OnProcessCreated();
 	virtual void OnProcessExit();
 	virtual void OnModuleLoaded(void* module, char* module_name);
 	virtual void OnModuleUnloaded(void* module);
-	virtual bool OnException(Exception* exception_record);
+	virtual bool OnException(Exception* exception_record, Context* context_record);
 	virtual void OnCrashed(Exception* exception_record);
 
 	virtual size_t GetTranslatedAddress(size_t address);
@@ -128,11 +130,11 @@ protected:
 	void  RemoteRead(void* address, void* buffer, size_t size);
 	void  RemoteProtect(void* address, size_t size, MemoryProtection protect);
 
-	size_t GetRegister(Register r);
-	void   SetRegister(Register r, size_t value);
+	size_t GetRegister(Context* context, Register r);
+	void   SetRegister(Context* context, Register r, size_t value);
 
-	void SaveRegisters(SavedRegisters* registers);
-	void RestoreRegisters(SavedRegisters* registers);
+	void SaveRegisters(Context* context, SavedRegisters* registers);
+	void RestoreRegisters(Context* context, SavedRegisters* registers);
 
 	DWORD GetProcOffset(HMODULE module, const char* name);
 

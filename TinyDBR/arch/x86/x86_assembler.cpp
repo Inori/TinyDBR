@@ -17,7 +17,15 @@ limitations under the License.
 #include "x86_assembler.h"
 
 // int3
-unsigned char BREAKPOINT[] = {0xCC};
+// unsigned char BREAKPOINT[] = {0xCC};
+
+// hlt
+// we'll debug inter process, but visual studio can not
+// leave int3 breaks to application's exception handler,
+// hence we use hlt instead, this will generate a 
+// EXCEPTION_PRIV_INSTRUCTION exception, and we treat it
+// as a debug break point exception
+unsigned char BREAKPOINT[] = {0xF4};
 
 // nop
 unsigned char NOP[] = {0x90};
