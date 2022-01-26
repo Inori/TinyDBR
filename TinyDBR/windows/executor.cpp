@@ -443,7 +443,6 @@ void Executor::ConvertException(
 	{
 	case EXCEPTION_BREAKPOINT:
 	case 0x4000001f:
-	case EXCEPTION_PRIV_INSTRUCTION:
 		exception->type = BREAKPOINT;
 		break;
 	case EXCEPTION_ACCESS_VIOLATION:
@@ -477,6 +476,16 @@ void Executor::ConvertException(
 		}
 
 		exception->access_address = (void*)(win_exception_record->ExceptionInformation[1]);
+	}
+
+	if (win_exception_record->ExceptionCode == EXCEPTION_PRIV_INSTRUCTION)
+	{
+		uint8_t* ip = reinterpret_cast<uint8_t*>(win_exception_record->ExceptionAddress);
+		// 0xF4 is hlt
+		if (ip[0] == 0xF4)
+		{
+			exception->type = BREAKPOINT;
+		}
 	}
 }
 
