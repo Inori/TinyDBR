@@ -24,6 +24,12 @@ struct SavedRegisters
 class Executor : public Singleton<TinyDBR>
 {
 	friend class Singleton<TinyDBR>;
+	friend class UnwindGenerator;
+#if defined(_WIN64)
+	friend class WinUnwindGenerator;
+#elif __APPLE__
+	friend class UnwindGeneratorMacOS;
+#endif
 
 public:
 	Executor();

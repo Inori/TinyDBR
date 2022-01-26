@@ -17,6 +17,7 @@ limitations under the License.
 #ifdef _WIN64
 
 #include "winunwind.h"
+#include "executor.h"
 
 WinUnwindData::~WinUnwindData() {
   for (auto pair : unwind_infos)
@@ -593,16 +594,19 @@ size_t WinUnwindGenerator::MaybeRedirectExecution(ModuleInfo* module, size_t IP)
   return continue_address;
 }
 
-bool WinUnwindGenerator::HandleBreakpoint(ModuleInfo* module, void* address) {
+bool WinUnwindGenerator::HandleBreakpoint(ModuleInfo* module, void* address, void* context)
+{
   WinUnwindData* unwind_data = (WinUnwindData*)module->unwind_data;
   if (!unwind_data) return false;
+  Executor::Context* ctx = (Executor::Context*)context;
 
-  if (size_t(address) == unwind_data->register_breakpoint) {
-    // size_t rax = tinyinst_.GetRegister(RAX);
-    // printf("Registration complete, rax: %zx\n", rax);
-	  tinydbr_.RestoreRegisters(nullptr, &unwind_data->register_saved_registers);
-	tinydbr_.SetRegister(nullptr, RIP, unwind_data->register_continue_IP);
-    return true;
+  if (size_t(address) == unwind_data->register_breakpoint)
+  {
+	  // size_t rax = tinyinst_.GetRegister(RAX);
+	  // printf("Registration complete, rax: %zx\n", rax);
+	  tinydbr_.RestoreRegisters(ctx, &unwind_data->register_saved_registers);
+	  tinydbr_.SetRegister(ctx, RIP, unwind_data->register_continue_IP);
+	  return true;
   }
 
   auto handler_iter = unwind_data->handler_start_breakpoints.find((size_t)address);
@@ -644,7 +648,7 @@ bool WinUnwindGenerator::HandleBreakpoint(ModuleInfo* module, void* address) {
     tinydbr_.RemoteWrite((void*)pdispatcher_context, &dispatcher_context, sizeof(dispatcher_context));
 
     // redirect execution to the corresponding original handler
-	tinydbr_.SetRegister(nullptr, RIP, handler_iter->second);
+	tinydbr_.SetRegister(ctx, RIP, handler_iter->second);
     return true;
   }
 

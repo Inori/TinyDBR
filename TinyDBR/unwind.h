@@ -17,6 +17,7 @@ limitations under the License.
 #ifndef UNWIND_H
 #define UNWIND_H
 
+
 class TinyDBR;
 class ModuleInfo;
 
@@ -58,7 +59,10 @@ public:
 
   virtual void OnReturnAddress(ModuleInfo *module, size_t original_address, size_t translated_address) { }
   
-  virtual bool HandleBreakpoint(ModuleInfo* module, void *address) { return false; }
+  virtual bool HandleBreakpoint(ModuleInfo* module, void* address, void* context)
+  {
+	  return false;
+  }
 
   virtual bool Is64BitOnly() { return false; }
 

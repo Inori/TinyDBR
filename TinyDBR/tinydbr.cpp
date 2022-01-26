@@ -351,7 +351,7 @@ bool TinyDBR::HandleBreakpoint(void* address, Context* context)
 		return true;
 	}
 
-	if (unwind_generator->HandleBreakpoint(module, address))
+	if (unwind_generator->HandleBreakpoint(module, address, context))
 	{
 		return true;
 	}
@@ -889,6 +889,17 @@ bool TinyDBR::TryExecuteInstrumented(Context* context, char* address)
 	if (!GetRegion(module, (size_t)address))
 		return false;
 
+	// TODO:
+	// move this to Executor class.
+	if (!child_entrypoint_reached)
+	{
+		void* entry_point = GetModuleEntrypoint(module->module_header);
+		if (entry_point == address)
+		{
+			OnEntrypoint();
+		}
+	}
+
 	if (trace_module_entries)
 	{
 		printf("TRACE: Entered module %s at address %p\n", module->module_name.c_str(), static_cast<void*>(address));
@@ -948,7 +959,12 @@ void TinyDBR::InstrumentModule(ModuleInfo* module)
 	// just reuse the same data
 	if (persist_instrumentation_data && module->instrumented)
 	{
-		ProtectCodeRanges(&module->executable_ranges);
+		// TODO:
+		// currently, ProtectCodeRanges is not compatible with inter process stuffs.
+		// comment it for debugging purpose.
+
+		// ProtectCodeRanges(&module->executable_ranges);
+
 		FixCrossModuleLinks(module);
 		printf("Module %s already instrumented, "
 			   "reusing instrumentation data\n",
@@ -1217,6 +1233,8 @@ void TinyDBR::OnEntrypoint()
 
 bool TinyDBR::OnException(Exception* exception_record, Context* context_record)
 {
+	Executor::OnException(exception_record, context_record);
+
 	switch (exception_record->type)
 	{
 	case BREAKPOINT:
@@ -1302,7 +1320,7 @@ void TinyDBR::Init(const std::vector<std::string>& instrument_module_names)
 	instrument_modules_on_load    = false;
 	patch_return_addresses        = false;
 	instrument_cross_module_calls = true;
-	persist_instrumentation_data  = true;
+	persist_instrumentation_data = true;
 
 	trace_basic_blocks   = false;
 	trace_module_entries = false;
@@ -1363,7 +1381,7 @@ void TinyDBR::Init(const std::vector<std::string>& instrument_module_names)
 	//}
 
 	// generate_unwind = GetBinaryOption("-generate_unwind", argc, argv, false);
-	generate_unwind = false;
+	generate_unwind = true;
 
 	// if patch_return_addresses is on, disable generate_unwind
 	// regardless of the flag

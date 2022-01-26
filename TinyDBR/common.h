@@ -57,6 +57,7 @@ enum {
     SAY("[-] PROGRAM ABORT : " __VA_ARGS__); \
     SAY("         Location : %s(), %s:%u\n\n", \
          __FUNCTION__, __FILE__, __LINE__); \
+    __debugbreak(); \
     exit(1); \
   } while (0)
 

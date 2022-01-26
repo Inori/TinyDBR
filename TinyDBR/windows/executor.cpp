@@ -98,6 +98,11 @@ void Executor::OnModuleUnloaded(void* module)
 // should return true if the exception has been handled
 bool Executor::OnException(Exception* exception_record, Context* context_record)
 {
+	if ((exception_record->type == ACCESS_VIOLATION) &&
+		(exception_record->maybe_execute_violation))
+	{
+
+	}
 	return false;
 }
 
@@ -139,6 +144,7 @@ void Executor::ExtractAndProtectCodeRanges(
 		size_t ret = VirtualQuery(cur_address,
 								  &meminfobuf,
 								  sizeof(MEMORY_BASIC_INFORMATION));
+
 		if (!ret)
 			break;
 

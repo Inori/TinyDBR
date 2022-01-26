@@ -125,7 +125,7 @@ public:
 
 	size_t MaybeRedirectExecution(ModuleInfo* module, size_t IP) override;
 
-	bool HandleBreakpoint(ModuleInfo* module, void* address) override;
+	bool HandleBreakpoint(ModuleInfo* module, void* address, void* context) override;
 
 	void OnReturnAddress(ModuleInfo* module,
 		size_t original_address,
