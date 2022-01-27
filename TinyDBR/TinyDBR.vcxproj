@@ -154,6 +154,7 @@
     <ClCompile Include="common.cpp" />
     <ClCompile Include="tinydbr.cpp" />
     <ClCompile Include="windows\dllmain.cpp" />
+    <ClCompile Include="windows\dllnotify.cpp" />
     <ClCompile Include="windows\executor.cpp" />
     <ClCompile Include="windows\winunwind.cpp" />
   </ItemGroup>
@@ -167,6 +168,7 @@
     <ClInclude Include="singleton.h" />
     <ClInclude Include="tinydbr.h" />
     <ClInclude Include="unwind.h" />
+    <ClInclude Include="windows\dllnotify.h" />
     <ClInclude Include="windows\executor.h" />
     <ClInclude Include="windows\winunwind.h" />
   </ItemGroup>

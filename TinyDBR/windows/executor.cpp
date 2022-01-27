@@ -1,5 +1,7 @@
 #include "executor.h"
+#include "dllnotify.h"
 #include "../tinydbr.h"
+
 
 #include <Windows.h>
 #include <Psapi.h>
@@ -15,6 +17,7 @@ Executor::~Executor()
 void Executor::Init(const std::vector<std::string>& instrument_module_names)
 {
 	veh_handle = InstallVEHHandler();
+	dll_notify_cookie = InstallDllNotification(&Executor::DllNotificationHandler, this);
 
 	DWORD dwPid = GetCurrentProcessId();
 	self_handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid);
@@ -35,6 +38,12 @@ void Executor::Unit()
 	{
 		UninstallVEHHandler(veh_handle);
 		veh_handle = nullptr;
+	}
+
+	if (dll_notify_cookie)
+	{
+		UninstallDllNotification(dll_notify_cookie);
+		dll_notify_cookie = nullptr;
 	}
 }
 
@@ -958,6 +967,7 @@ void Executor::UninstallVEHHandler(void* handle)
 	} while (false);
 }
 
+
 LONG WINAPI Executor::VectoredExceptionHandler(EXCEPTION_POINTERS* ExceptionInfo)
 {
 	LONG action = EXCEPTION_CONTINUE_SEARCH;
@@ -974,4 +984,23 @@ LONG WINAPI Executor::VectoredExceptionHandler(EXCEPTION_POINTERS* ExceptionInfo
 	} while (false);
 
 	return action;
+}
+
+void __stdcall Executor::DllNotificationHandler(
+	unsigned long                    notification_reason,
+	const LDR_DLL_NOTIFICATION_DATA* notification_data,
+	void*                            context)
+{
+	Executor* executor = reinterpret_cast<Executor*>(context);
+	if (notification_reason == LDR_DLL_NOTIFICATION_REASON_LOADED)
+	{
+		auto& loaded = notification_data->Loaded;
+		std::string dll_name = UnicodeToAnsi(loaded.BaseDllName->Buffer, CP_ACP);
+		executor->OnModuleLoaded(loaded.DllBase, const_cast<char*>(dll_name.c_str()));
+	}
+	else if (notification_reason == LDR_DLL_NOTIFICATION_REASON_UNLOADED)
+	{
+		auto& unloaded = notification_data->Unloaded;
+		executor->OnModuleUnloaded(unloaded.DllBase);
+	}
 }

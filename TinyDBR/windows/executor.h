@@ -12,6 +12,7 @@
 
 typedef struct _EXCEPTION_RECORD   EXCEPTION_RECORD;
 typedef struct _EXCEPTION_POINTERS EXCEPTION_POINTERS;
+typedef union _LDR_DLL_NOTIFICATION_DATA LDR_DLL_NOTIFICATION_DATA;
 
 class TinyDBR;
 
@@ -150,10 +151,14 @@ protected:
 
 private:
 	void* InstallVEHHandler();
-
 	void UninstallVEHHandler(void* handle);
 
 	static long __stdcall VectoredExceptionHandler(EXCEPTION_POINTERS* ExceptionInfo);
+	
+	static void __stdcall DllNotificationHandler(
+		unsigned long                    notification_reason,
+		const LDR_DLL_NOTIFICATION_DATA* notification_data,
+		void*                            context);
 
 	void* RemoteAllocateBefore(uint64_t         min_address,
 							   uint64_t         max_address,
@@ -174,6 +179,7 @@ private:
 
 private:
 	void*  veh_handle             = nullptr;
+	void*  dll_notify_cookie      = nullptr;
 	size_t allocation_granularity = 0;
 	HANDLE self_handle            = NULL;
 	bool   have_thread_context    = false;

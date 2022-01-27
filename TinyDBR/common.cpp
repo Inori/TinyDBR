@@ -28,6 +28,7 @@ uint64_t GetCurTime(void)
 	return millis;
 }
 
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32)
 void* GetModuleEntrypoint(void* base_address)
 {
 	unsigned char headers[4096];
@@ -52,6 +53,22 @@ void* GetModuleEntrypoint(void* base_address)
 		return NULL;
 	return (char*)base_address + entrypoint_offset;
 }
+
+std::string UnicodeToAnsi(const std::wstring& wstr, unsigned int code_page)
+{
+	std::string result;
+	int len = WideCharToMultiByte(code_page, 0, wstr.c_str(), -1, NULL, 0, NULL, 0);
+	result.resize(len);
+	WideCharToMultiByte(code_page, 0, wstr.c_str(), -1, result.data(), len, NULL, 0);
+	return result;
+}
+
+#else
+
+// TODO:
+// MacOS implementation.
+
+#endif
 
 #if 0
 

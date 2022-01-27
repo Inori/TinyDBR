@@ -21,6 +21,7 @@ limitations under the License.
 #include <string.h>
 #include <inttypes.h>
 #include <list>
+#include <string>
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32)
     #include <windows.h>
@@ -74,6 +75,8 @@ struct AddressRange
 uint64_t GetCurTime(void);
 
 void* GetModuleEntrypoint(void* base_address);
+
+std::string UnicodeToAnsi(const std::wstring& wstr, unsigned int code_page);
 
 #if 0
 

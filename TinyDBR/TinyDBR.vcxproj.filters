@@ -36,6 +36,9 @@
     <ClCompile Include="arch\x86\x86_helpers.cpp">
       <Filter>Source Files\arch\x86</Filter>
     </ClCompile>
+    <ClCompile Include="windows\dllnotify.cpp">
+      <Filter>Source Files\windows</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="windows\executor.h">
@@ -70,6 +73,9 @@
     </ClInclude>
     <ClInclude Include="arch\x86\x86_helpers.h">
       <Filter>Source Files\arch\x86</Filter>
+    </ClInclude>
+    <ClInclude Include="windows\dllnotify.h">
+      <Filter>Source Files\windows</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
