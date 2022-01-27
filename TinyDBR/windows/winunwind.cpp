@@ -104,6 +104,12 @@ void WinUnwindData::CommitLastTranslated() {
   }
 }
 
+void WinUnwindGenerator::Init()
+{
+	HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+	RtlAddFunctionTable_addr = (size_t)GetProcAddress(hNtdll, "RtlAddFunctionTable");
+}
+
 void WinUnwindGenerator::OnModuleInstrumented(ModuleInfo* module) {
   if (tinydbr_.child_ptr_size == 4) {
     FATAL("-generate_unwind is unneeded (and thus incompatible) with 32-bit targets");

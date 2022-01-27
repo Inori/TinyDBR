@@ -118,6 +118,8 @@ class WinUnwindGenerator : public UnwindGenerator {
 public:
 	WinUnwindGenerator(TinyDBR& tinyinst) : UnwindGenerator(tinyinst), RtlAddFunctionTable_addr(0) { }
 
+	virtual void Init() override;
+
 	void OnModuleInstrumented(ModuleInfo* module) override;
 	void OnModuleUninstrumented(ModuleInfo* module) override;
 

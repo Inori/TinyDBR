@@ -16,7 +16,7 @@ Executor::~Executor()
 
 void Executor::Init(const std::vector<std::string>& instrument_module_names)
 {
-	veh_handle = InstallVEHHandler();
+	veh_handle        = InstallVEHHandler();
 	dll_notify_cookie = InstallDllNotification(&Executor::DllNotificationHandler, this);
 
 	DWORD dwPid = GetCurrentProcessId();
@@ -30,6 +30,12 @@ void Executor::Init(const std::vector<std::string>& instrument_module_names)
 	SYSTEM_INFO system_info;
 	GetSystemInfo(&system_info);
 	allocation_granularity = system_info.dwAllocationGranularity;
+
+	AllocConsole();
+	FILE* fDummy;
+	freopen_s(&fDummy, "CONIN$", "r", stdin);
+	freopen_s(&fDummy, "CONOUT$", "w", stderr);
+	freopen_s(&fDummy, "CONOUT$", "w", stdout);
 }
 
 void Executor::Unit()
