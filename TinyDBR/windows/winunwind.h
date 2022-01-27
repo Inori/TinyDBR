@@ -125,7 +125,7 @@ public:
 
 	void OnModuleLoaded(void* module, char* module_name) override;
 
-	size_t MaybeRedirectExecution(ModuleInfo* module, size_t IP) override;
+	size_t MaybeRedirectExecution(ModuleInfo* module, size_t IP, void* context) override;
 
 	bool HandleBreakpoint(ModuleInfo* module, void* address, void* context) override;
 

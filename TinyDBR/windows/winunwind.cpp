@@ -503,7 +503,7 @@ size_t WinUnwindGenerator::WriteFunctionTable(ModuleInfo* module, FunctionTable&
   return function_table_addr;
 }
 
-size_t WinUnwindGenerator::MaybeRedirectExecution(ModuleInfo* module, size_t IP) {
+size_t WinUnwindGenerator::MaybeRedirectExecution(ModuleInfo* module, size_t IP, void* context) {
   WinUnwindData* unwind_data = (WinUnwindData*)module->unwind_data;
 
   size_t code_size_before = module->instrumented_code_allocated;
@@ -589,7 +589,7 @@ size_t WinUnwindGenerator::MaybeRedirectExecution(ModuleInfo* module, size_t IP)
   unwind_data->register_breakpoint = tinydbr_.GetCurrentInstrumentedAddress(module);
   tinydbr_.assembler_->Breakpoint(module);
   unwind_data->register_continue_IP = IP;
-  tinydbr_.SaveRegisters(nullptr, &unwind_data->register_saved_registers);
+  tinydbr_.SaveRegisters((Executor::Context*)context, &unwind_data->register_saved_registers);
 
   // compute how much data we wrote and commit it all to the target process
   size_t code_size_after = module->instrumented_code_allocated;
@@ -619,7 +619,8 @@ bool WinUnwindGenerator::HandleBreakpoint(ModuleInfo* module, void* address, voi
   if (handler_iter != unwind_data->handler_start_breakpoints.end()) {
     // printf("handler start breakpoint\n");
 
-    PDISPATCHER_CONTEXT pdispatcher_context = (PDISPATCHER_CONTEXT)tinydbr_.GetRegister(nullptr, R9);
+    PDISPATCHER_CONTEXT pdispatcher_context = 
+        (PDISPATCHER_CONTEXT)tinydbr_.GetRegister((Executor::Context*)context, R9);
     DISPATCHER_CONTEXT dispatcher_context;
  
     tinydbr_.RemoteRead((void*)pdispatcher_context, &dispatcher_context, sizeof(dispatcher_context));

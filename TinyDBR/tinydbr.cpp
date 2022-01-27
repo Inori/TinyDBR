@@ -438,7 +438,7 @@ bool TinyDBR::HandleIndirectJMPBreakpoint(void* address, Context* context)
 
 	if (target_module)
 	{
-		continue_address = unwind_generator->MaybeRedirectExecution(target_module, continue_address);
+		continue_address = unwind_generator->MaybeRedirectExecution(target_module, continue_address, context);
 	}
 
 	// redirect execution to just created entry which should handle it immediately
@@ -592,8 +592,8 @@ void TinyDBR::TranslateBasicBlock(char*                                     addr
 										(size_t)address,
 										GetCurrentInstrumentedAddress(module));
 
-	// printf("Instrumenting bb, original at %p, instrumented at %p\n",
-	//        address, module->instrumented_code_remote + translated_offset);
+	//printf("Instrumenting bb, original at %p, instrumented at %p\n",
+	//	   address, module->instrumented_code_remote + translated_offset);
 
 	module->basic_blocks.insert({ original_offset, translated_offset });
 
@@ -913,7 +913,7 @@ bool TinyDBR::TryExecuteInstrumented(Context* context, char* address)
 	size_t translated_address = GetTranslatedAddress(module, (size_t)address);
 	OnModuleEntered(module, (size_t)address);
 
-	translated_address = unwind_generator->MaybeRedirectExecution(module, translated_address);
+	translated_address = unwind_generator->MaybeRedirectExecution(module, translated_address, context);
 
 	SetRegister(context, ARCH_PC, translated_address);
 
@@ -1325,7 +1325,7 @@ void TinyDBR::Init(const std::vector<std::string>& instrument_module_names)
 	persist_instrumentation_data = true;
 
 	trace_basic_blocks   = false;
-	trace_module_entries = false;
+	trace_module_entries = true;
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) || defined(ARM64)
 	sp_offset = 0;

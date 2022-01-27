@@ -166,9 +166,11 @@ void Executor::ExtractAndProtectCodeRanges(
 		if (meminfobuf.Protect & 0xF0)
 		{
 			// printf("%p, %llx, %lx\n", meminfobuf.BaseAddress, meminfobuf.RegionSize, meminfobuf.Protect);
-
 			newRange.data = (char*)malloc(meminfobuf.RegionSize);
 
+			// TODO:
+			// the byte at entry point will be set to 0xCC by visual studio if run in debugger.
+			// thus the copied data is wrong at this address.
 			std::memcpy(newRange.data, meminfobuf.BaseAddress, meminfobuf.RegionSize);
 
 			uint8_t low      = meminfobuf.Protect & 0xFF;
@@ -817,17 +819,12 @@ void Executor::SetRegister(Context* context, Register r, size_t value)
 
 void Executor::SaveRegisters(Context* context, SavedRegisters* registers)
 {
-	CONTEXT lcContext = {};
-	GetThreadContext(GetCurrentThread(), &lcContext);
-	memcpy(&registers->saved_context, &lcContext, sizeof(registers->saved_context));
+	memcpy(&registers->saved_context, context, sizeof(registers->saved_context));
 }
 
 void Executor::RestoreRegisters(Context* context, SavedRegisters* registers)
 {
-	if (!SetThreadContext(GetCurrentThread(), &registers->saved_context))
-	{
-		FATAL("Error restoring registers");
-	}
+	memcpy(context, &registers->saved_context, sizeof(registers->saved_context));
 }
 
 DWORD Executor::GetProcOffset(HMODULE module, const char* name)

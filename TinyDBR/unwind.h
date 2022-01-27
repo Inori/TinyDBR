@@ -36,7 +36,7 @@ public:
   virtual void OnModuleInstrumented(ModuleInfo* module) { }
   virtual void OnModuleUninstrumented(ModuleInfo* module) { }
 
-  virtual size_t MaybeRedirectExecution(ModuleInfo* module, size_t IP) {
+  virtual size_t MaybeRedirectExecution(ModuleInfo* module, size_t IP, void* context) {
     return IP;
   }
 
