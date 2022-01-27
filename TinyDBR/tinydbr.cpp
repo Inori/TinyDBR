@@ -955,16 +955,17 @@ void TinyDBR::InstrumentModule(ModuleInfo* module)
 	if (instrumentation_disabled)
 		return;
 
+	// it's unlikely that the main executable module be reloaded.
+	if (module->main_module && module->instrumented)
+	{
+		return;
+	}
+
 	// if the module was previously instrumented
 	// just reuse the same data
 	if (persist_instrumentation_data && module->instrumented)
 	{
-		// TODO:
-		// currently, ProtectCodeRanges is not compatible with inter process stuffs.
-		// comment it for debugging purpose.
-
-		// ProtectCodeRanges(&module->executable_ranges);
-
+		ProtectCodeRanges(&module->executable_ranges);
 		FixCrossModuleLinks(module);
 		printf("Module %s already instrumented, "
 			   "reusing instrumentation data\n",
@@ -1064,6 +1065,7 @@ void TinyDBR::InstrumentMainModule(const std::string& module_name)
 	auto module_info = IsInstrumentModule(module_name.c_str());
 	if (module_info)
 	{
+		module_info->main_module = true;
 		HANDLE module_handle = GetModuleHandleA(module_name.c_str());
 		OnInstrumentModuleLoaded(module_handle, module_info);
 		InstrumentModule(module_info);

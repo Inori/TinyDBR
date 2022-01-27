@@ -280,6 +280,7 @@ public:
 	size_t                  code_size;
 	bool                    loaded;
 	bool                    instrumented;
+	bool                    main_module;
 	std::list<AddressRange> executable_ranges;
 
 	size_t instrumented_code_size;
