@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <mutex>
 
 typedef struct _EXCEPTION_RECORD   EXCEPTION_RECORD;
 typedef struct _EXCEPTION_POINTERS EXCEPTION_POINTERS;
@@ -185,4 +186,6 @@ private:
 	bool   have_thread_context    = false;
 
 	bool trace_debug_events = false;
+
+	std::mutex mutex;
 };

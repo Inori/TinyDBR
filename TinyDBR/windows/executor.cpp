@@ -56,6 +56,7 @@ void Executor::Unit()
 long Executor::OnVEHException(EXCEPTION_POINTERS* ExceptionInfo)
 {
 	LONG action = EXCEPTION_CONTINUE_SEARCH;
+	std::lock_guard<std::mutex> lock(mutex);
 	do
 	{
 		Exception exception = {};
@@ -172,6 +173,12 @@ void Executor::ExtractAndProtectCodeRanges(
 			// the byte at entry point will be set to 0xCC by visual studio if run in debugger.
 			// thus the copied data is wrong at this address.
 			std::memcpy(newRange.data, meminfobuf.BaseAddress, meminfobuf.RegionSize);
+
+			//uint8_t* entry_point = (uint8_t*)((uint8_t*)module_base + 0x5E3EB90);
+			//uint8_t* data_oep = (uint8_t*)newRange.data + (entry_point - meminfobuf.BaseAddress);
+			//*data_oep         = 0x48;
+			
+
 
 			uint8_t low      = meminfobuf.Protect & 0xFF;
 			low              = low >> 4;
