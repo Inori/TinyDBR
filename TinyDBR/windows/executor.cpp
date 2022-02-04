@@ -69,10 +69,6 @@ long Executor::OnVEHException(EXCEPTION_POINTERS* ExceptionInfo)
 		{
 			action = EXCEPTION_CONTINUE_EXECUTION;
 		}
-		else
-		{
-			MessageBoxA(NULL, 0, 0, MB_OK);
-		}
 
 	} while (false);
 
@@ -178,6 +174,7 @@ void Executor::ExtractAndProtectCodeRanges(
 			// the byte at entry point will be set to 0xCC by visual studio if run in debugger.
 			// thus the copied data is wrong at this address.
 			std::memcpy(newRange.data, meminfobuf.BaseAddress, meminfobuf.RegionSize);
+
 
 			uint8_t low      = meminfobuf.Protect & 0xFF;
 			low              = low >> 4;
@@ -958,6 +955,12 @@ void Executor::PatchPointersRemote(size_t min_address, size_t max_address, std::
 
 void* Executor::InstallVEHHandler()
 {
+	// TODO:
+	// There left a problem:
+	// If the target process then register a VEH handler at the front of handler list after
+	// we do, the exception will pass to that handler first, and since the target's code is
+	// protected to be non-executable by us, then there will be an infinite loop calling
+	// the target's VEH handler and finally cause stack overflow.
 	void* handle = AddVectoredExceptionHandler(TRUE, &Executor::VectoredExceptionHandler);
 	return handle;
 }
