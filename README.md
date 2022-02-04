@@ -1,10 +1,10 @@
-# TinyRCD
+# TinyDBR
 
 ![UE4 Demo](https://github.com/Inori/TinyDBR/blob/master/ScreenShot/demo.jpg)
 
-## What is TinyRCD?
+## What is TinyDBR?
 
-TinyRCD is meant for tiny dynamic binary rewriter fox x86 instruction set.
+TinyDBR is meant for tiny dynamic binary rewriter fox x86 instruction set.
 
 This is a port to the [TinyInst](https://github.com/googleprojectzero/TinyInst) by Google Project Zero team to fit my own needs.
 
@@ -12,7 +12,7 @@ The original TinyInst works as a debuuger and the target process runs seperately
 
 While TinyDBR runs inter the target process and translate instructions right there.
 
-## How TinyRCD works?
+## How TinyDBR works?
 
 Currently, TinyDBR only support Windows and X64.
 
