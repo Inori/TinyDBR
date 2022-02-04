@@ -483,7 +483,7 @@ void X86Assembler::InstrumentGlobalIndirect(ModuleInfo *module,
                                module->jumptable_address_offset));
   }
 
-  // jmp RBX
+  // jmp [RBX]
   tinyinst_.WriteCode(module, JMP_B, sizeof(JMP_B));
 }
 

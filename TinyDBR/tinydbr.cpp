@@ -22,6 +22,7 @@ limitations under the License.
 #include <list>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdatomic.h>
 
 #ifdef ARM64
 #include "arch/arm64/arm64_assembler.h"
@@ -168,6 +169,12 @@ void TinyDBR::InitGlobalJumptable(ModuleInfo* module)
 		JUMPTABLE_SIZE * child_ptr_size +
 		child_ptr_size;
 
+	// jump table memory must be naturally aligned to keep memory access atomic 
+	if (module->jumptable_offset % child_ptr_size != 0)
+	{
+		FATAL("jump table memory not aligned.");
+	}
+
 	for (size_t i = 0; i < JUMPTABLE_SIZE; i++)
 	{
 		WritePointer(module, module->br_indirect_newtarget_global);
@@ -199,6 +206,37 @@ void TinyDBR::CommitCode(ModuleInfo* module, size_t start_offset, size_t size)
 	RemoteWrite(module->instrumented_code_remote + start_offset,
 				module->instrumented_code_local + start_offset,
 				size);
+}
+
+template <typename T>
+void TinyDBR::CommitValueAtomicT(ModuleInfo* module, size_t start_offset)
+{
+	static_assert(std::is_integral_v<T> && sizeof(T) <= sizeof(uint64_t));
+	T                 value = *reinterpret_cast<T*>(module->instrumented_code_local + start_offset);
+	_Atomic T* ptr   = reinterpret_cast<_Atomic T*>(module->instrumented_code_remote + start_offset);
+
+	if ((uintptr_t)ptr % sizeof(T) != 0)
+	{
+		FATAL("pointer not aligned.");
+	}
+
+	atomic_store_explicit(ptr, value, std::memory_order_relaxed);
+}
+
+void TinyDBR::CommitValueAtomic(ModuleInfo* module, size_t start_offset, size_t size)
+{
+	if (size == sizeof(uint32_t))
+	{
+		CommitValueAtomicT<uint32_t>(module, start_offset);
+	}
+	else if (size == sizeof(uint64_t))
+	{
+		CommitValueAtomicT<uint64_t>(module, start_offset);
+	}
+	else
+	{
+		FATAL("only support 4 or 8 bytes atomic types.");
+	}
 }
 
 // Checks if there is sufficient space and writes code at the current offset
@@ -340,7 +378,9 @@ bool TinyDBR::HandleBreakpoint(void* address, Context* context)
 
 	// indirect jump new target
 	if (HandleIndirectJMPBreakpoint(address, context))
+	{
 		return true;
+	}
 
 	// invalid instruction
 	if (module->invalid_instructions.find((size_t)address) != module->invalid_instructions.end())
@@ -506,10 +546,12 @@ size_t TinyDBR::AddTranslatedJump(ModuleInfo*            module,
 			(uint32_t)((size_t)module->instrumented_code_remote + entry_offset);
 	}
 
-	CommitCode(module, list_head_offset, child_ptr_size);
+	// commit code first to ensure there is valid code when the table entry is written
 	CommitCode(module,
 			   entry_offset,
 			   module->instrumented_code_allocated - entry_offset);
+	CommitValueAtomic(module, list_head_offset, child_ptr_size);
+
 
 	return entry_offset;
 }
@@ -592,8 +634,8 @@ void TinyDBR::TranslateBasicBlock(char*                                     addr
 										(size_t)address,
 										GetCurrentInstrumentedAddress(module));
 
-	//printf("Instrumenting bb, original at %p, instrumented at %p\n",
-	//	   address, module->instrumented_code_remote + translated_offset);
+	//printf("[%08X]: Instrumenting bb, original at %p, instrumented at %p\n",
+	//	   GetCurTid(), address, module->instrumented_code_remote + translated_offset);
 
 	module->basic_blocks.insert({ original_offset, translated_offset });
 
@@ -902,7 +944,8 @@ bool TinyDBR::TryExecuteInstrumented(Context* context, char* address)
 
 	if (trace_module_entries)
 	{
-		printf("TRACE: Entered module %s at address %p\n", module->module_name.c_str(), static_cast<void*>(address));
+		printf("TRACE [%08X]: Entered module %s at address %p\n", 
+			GetCurTid(), module->module_name.c_str(), static_cast<void*>(address));
 	}
 	if (patch_module_entries)
 	{
@@ -999,7 +1042,7 @@ void TinyDBR::InstrumentModule(ModuleInfo* module)
 		(char*)RemoteAllocateNear((uint64_t)module->min_address,
 								  (uint64_t)module->max_address,
 								  module->instrumented_code_size,
-								  READEXECUTE);
+								  READWRITEEXECUTE);
 
 	if (!module->instrumented_code_remote)
 	{
@@ -1322,7 +1365,7 @@ void TinyDBR::Init(const std::vector<std::string>& instrument_module_names)
 	instrument_modules_on_load    = false;
 	patch_return_addresses        = false;
 	instrument_cross_module_calls = true;
-	persist_instrumentation_data = true;
+	persist_instrumentation_data  = true;
 
 	trace_basic_blocks   = false;
 	trace_module_entries = true;

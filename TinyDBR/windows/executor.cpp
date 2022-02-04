@@ -53,10 +53,11 @@ void Executor::Unit()
 	}
 }
 
+
 long Executor::OnVEHException(EXCEPTION_POINTERS* ExceptionInfo)
 {
 	LONG action = EXCEPTION_CONTINUE_SEARCH;
-	std::lock_guard<std::mutex> lock(mutex);
+	std::lock_guard<std::mutex> lock(exception_mutex);
 	do
 	{
 		Exception exception = {};
@@ -67,6 +68,10 @@ long Executor::OnVEHException(EXCEPTION_POINTERS* ExceptionInfo)
 		if (handled)
 		{
 			action = EXCEPTION_CONTINUE_EXECUTION;
+		}
+		else
+		{
+			MessageBoxA(NULL, 0, 0, MB_OK);
 		}
 
 	} while (false);
@@ -173,12 +178,6 @@ void Executor::ExtractAndProtectCodeRanges(
 			// the byte at entry point will be set to 0xCC by visual studio if run in debugger.
 			// thus the copied data is wrong at this address.
 			std::memcpy(newRange.data, meminfobuf.BaseAddress, meminfobuf.RegionSize);
-
-			//uint8_t* entry_point = (uint8_t*)((uint8_t*)module_base + 0x5E3EB90);
-			//uint8_t* data_oep = (uint8_t*)newRange.data + (entry_point - meminfobuf.BaseAddress);
-			//*data_oep         = 0x48;
-			
-
 
 			uint8_t low      = meminfobuf.Protect & 0xFF;
 			low              = low >> 4;
@@ -448,7 +447,7 @@ DWORD Executor::GetLoadedModules(HMODULE** modules)
 								  &hmodules_size,
 								  LIST_MODULES_ALL))
 		{
-			FATAL("EnumProcessModules failed, %x\n", GetLastError());
+			FATAL("EnumProcessModules failed, %x\n", (uint32_t)GetLastError());
 		}
 		if (hmodules_size <= module_handle_storage_size)
 			break;
@@ -836,7 +835,7 @@ void Executor::RestoreRegisters(Context* context, SavedRegisters* registers)
 
 DWORD Executor::GetProcOffset(HMODULE module, const char* name)
 {
-	void* proc_address = GetProcAddress(module, name);
+	void* proc_address = (void*)GetProcAddress(module, name);
 	DWORD offset =
 		static_cast<DWORD>(
 			reinterpret_cast<uintptr_t>(proc_address) - reinterpret_cast<uintptr_t>(module));

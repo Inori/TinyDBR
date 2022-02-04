@@ -88,8 +88,6 @@ class X86Assembler : public Assembler {
                      TinyDBR::IndirectInstrumentation mode,
                      size_t bb_address);
   void PushReturnAddress(ModuleInfo *module, uint64_t return_address);
-
-  int xed_mmode_;
 };
 
 #endif  // ARCH_X86_X86_ASSEMBLER_H

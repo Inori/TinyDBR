@@ -187,5 +187,5 @@ private:
 
 	bool trace_debug_events = false;
 
-	std::mutex mutex;
+	std::mutex exception_mutex;
 };

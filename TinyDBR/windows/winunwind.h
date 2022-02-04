@@ -50,7 +50,10 @@ struct FunctionInfo {
 };
 
 struct FunctionTable {
-	FunctionTable() : max_entries(0), addr(0) {}
+	FunctionTable() :
+		addr(0), max_entries(0)
+	{
+	}
 
 	size_t addr;
 	size_t offset;

@@ -74,6 +74,10 @@ struct AddressRange
 // gets time in milliseconds
 uint64_t GetCurTime(void);
 
+uint32_t GetCurTid(void);
+
+bool PauseResumeThreadList(uint32_t dwOwnerPID, bool bResumeThread);
+
 void* GetModuleEntrypoint(void* base_address);
 
 std::string UnicodeToAnsi(const std::wstring& wstr, unsigned int code_page);

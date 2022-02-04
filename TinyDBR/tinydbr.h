@@ -125,6 +125,7 @@ protected:
 
 	size_t GetCurrentInstrumentedAddress(ModuleInfo* module);
 	void   CommitCode(ModuleInfo* module, size_t start_offset, size_t size);
+	void   CommitValueAtomic(ModuleInfo* module, size_t start_offset, size_t size);
 
 	ModuleInfo*   GetModuleByName(const char* name);
 	ModuleInfo*   GetModule(size_t address);
@@ -221,7 +222,8 @@ private:
 	void PatchPointersLocal(char* buf, size_t size, std::unordered_map<size_t, size_t>& search_replace, bool commit_code, ModuleInfo* module);
 	template <typename T>
 	void PatchPointersLocalT(char* buf, size_t size, std::unordered_map<size_t, size_t>& search_replace, bool commit_code, ModuleInfo* module);
-
+	template <typename T>
+	void CommitValueAtomicT(ModuleInfo* module, size_t start_offset);
 	void InstrumentMainModule(const std::string& module_name);
 
 private:
@@ -257,6 +259,7 @@ private:
 	friend class UnwindGeneratorMacOS;
 #endif
 };
+
 
 struct IndirectBreakpoinInfo
 {
