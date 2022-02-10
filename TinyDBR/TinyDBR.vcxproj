@@ -129,7 +129,8 @@
       <AdditionalDependencies>xed.lib;xed-ild.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /b/v/y D:\Code\TinyDBR\x64\Debug\TinyDBR.dll D:\Code\UnrealProjects\UmgUI\Output\WindowsNoEditor\Engine\Binaries\Win64\</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
