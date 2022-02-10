@@ -11,6 +11,8 @@
 #include <vector>
 #include <mutex>
 
+#include <Windows.h>
+
 typedef struct _EXCEPTION_RECORD   EXCEPTION_RECORD;
 typedef struct _EXCEPTION_POINTERS EXCEPTION_POINTERS;
 typedef union _LDR_DLL_NOTIFICATION_DATA LDR_DLL_NOTIFICATION_DATA;

@@ -24,6 +24,7 @@ limitations under the License.
 #include <stdio.h>
 #include <stdatomic.h>
 
+
 #ifdef ARM64
 #include "arch/arm64/arm64_assembler.h"
 #else
@@ -212,8 +213,9 @@ template <typename T>
 void TinyDBR::CommitValueAtomicT(ModuleInfo* module, size_t start_offset)
 {
 	static_assert(std::is_integral_v<T> && sizeof(T) <= sizeof(uint64_t));
-	T                 value = *reinterpret_cast<T*>(module->instrumented_code_local + start_offset);
-	_Atomic T* ptr   = reinterpret_cast<_Atomic T*>(module->instrumented_code_remote + start_offset);
+
+	T           value = *reinterpret_cast<T*>(module->instrumented_code_local + start_offset);
+	_Atomic(T)* ptr   = reinterpret_cast<_Atomic(T)*>(module->instrumented_code_remote + start_offset);
 
 	if ((uintptr_t)ptr % sizeof(T) != 0)
 	{

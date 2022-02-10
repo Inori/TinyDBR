@@ -21,6 +21,21 @@ limitations under the License.
 #include <list>
 #include <stdio.h>
 
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32)
+#include <windows.h>
+#define ArgvEscape ArgvEscapeWindows
+#else
+#include <limits.h>
+#ifndef MAX_PATH
+#define MAX_PATH PATH_MAX
+#endif
+
+#include <strings.h>
+#define _stricmp strcasecmp
+
+#define ArgvEscape ArgvEscapeMacOS
+#endif
+
 uint64_t GetCurTime(void)
 {
 	auto duration = std::chrono::system_clock::now().time_since_epoch();

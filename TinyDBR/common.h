@@ -23,20 +23,7 @@ limitations under the License.
 #include <list>
 #include <string>
 
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32)
-    #include <windows.h>
-    #define ArgvEscape ArgvEscapeWindows
-#else
-    #include <limits.h>
-    #ifndef MAX_PATH
-        #define MAX_PATH PATH_MAX
-    #endif
 
-    #include <strings.h>
-    #define _stricmp strcasecmp
-
-    #define ArgvEscape ArgvEscapeMacOS
-#endif
 
 enum {
   /* 00 */ FAULT_NONE,
@@ -82,14 +69,5 @@ void* GetModuleEntrypoint(void* base_address);
 
 std::string UnicodeToAnsi(const std::wstring& wstr, unsigned int code_page);
 
-#if 0
-
-char *GetOption(const char *name, int argc, char** argv);
-void GetOptionAll(const char *name, int argc, char** argv, std::list<char *> *results);
-bool GetBinaryOption(const char *name, int argc, char** argv, bool default_value);
-int GetIntOption(const char *name, int argc, char** argv, int default_value);
-
-char *ArgvToCmd(int argc, char** argv);
-#endif
 
 #endif
