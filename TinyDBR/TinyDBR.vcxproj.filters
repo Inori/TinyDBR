@@ -15,9 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="windows\dllmain.cpp">
-      <Filter>Source Files\windows</Filter>
-    </ClCompile>
     <ClCompile Include="windows\executor.cpp">
       <Filter>Source Files\windows</Filter>
     </ClCompile>

@@ -1,9 +1,17 @@
+#include "tinydbr.h"
+
 #include <Windows.h>
-#include <string>
 #include <filesystem>
 #include <memory>
+#include <string>
 
-#include "../tinydbr.h"
+/*
+* TinyDBR DLL translator, you need to inject this compiled dll into to target process
+* before the execution of main module entry point.
+*/
+
+
+
 
 // For detours inject
 __declspec(dllexport) void WINAPI Dummy()
@@ -13,7 +21,7 @@ __declspec(dllexport) void WINAPI Dummy()
 std::string GetExeName()
 {
 	std::string name;
-	do 
+	do
 	{
 		char szFileName[MAX_PATH] = { 0 };
 		if (GetModuleFileNameA(NULL, szFileName, MAX_PATH) == 0)
@@ -30,7 +38,7 @@ std::string GetExeName()
 
 void ReWriteModule()
 {
-	do 
+	do
 	{
 		auto module_name = GetExeName();
 		if (module_name.empty())
@@ -38,26 +46,16 @@ void ReWriteModule()
 			break;
 		}
 
-		void* exe_base    = reinterpret_cast<void*>(GetModuleHandleA(NULL));
-		void* entry_point = GetModuleEntrypoint(exe_base);
-		if (!entry_point)
-		{
-			break;
-		}
-
 		auto tinydbr = TinyDBR::GetInstance();
 
-		tinydbr->Init({module_name});
-
-		// tinydbr->Run(entry_point);
+		tinydbr->Init({ module_name });
 
 	} while (false);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule,
-	DWORD  ul_reason_for_call,
-	LPVOID lpReserved
-)
+					  DWORD   ul_reason_for_call,
+					  LPVOID  lpReserved)
 {
 	switch (ul_reason_for_call)
 	{
