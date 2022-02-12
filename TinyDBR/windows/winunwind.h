@@ -19,8 +19,8 @@ limitations under the License.
 
 #ifdef _WIN64
 
-#include "..\unwind.h"
-#include "..\tinydbr.h"
+#include "unwind.h"
+#include "tinydbr.h"
 
 #include <vector>
 #include <set>

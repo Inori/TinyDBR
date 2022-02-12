@@ -73,6 +73,7 @@ struct CodeSection
 
 struct Options
 {
+	bool    shellcode_mode                = false;
 	bool    trace_debug_events            = false;
 	bool    instrument_modules_on_load    = false;
 	bool    patch_return_addresses        = false;
