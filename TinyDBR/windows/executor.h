@@ -39,32 +39,10 @@ public:
 	Executor();
 	virtual ~Executor();
 
+	// First module in array must be the main executable module.
 	virtual void Init(const std::vector<std::string>& instrument_module_names);
 
 	virtual void Unit();
-
-	// The caller should make sure
-	// code is within added modules.
-	template <typename... ArgTys>
-	bool Run(void* code, ArgTys... args)
-	{
-		typedef int (*FuncTy)(ArgTys... args);
-
-		bool ret = false;
-		do
-		{
-			if (!code)
-			{
-				break;
-			}
-
-			FuncTy func    = reinterpret_cast<FuncTy>(code);
-			int    ret_val = func(args...);
-
-			ret = true;
-		} while (false);
-		return ret;
-	}
 
 	long OnVEHException(EXCEPTION_POINTERS* ExceptionInfo);
 
@@ -188,6 +166,6 @@ private:
 	bool   have_thread_context    = false;
 
 	bool trace_debug_events = false;
-
+	std::vector<std::string> instrument_modules;
 	std::mutex exception_mutex;
 };

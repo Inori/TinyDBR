@@ -115,10 +115,14 @@ void Executor::OnModuleUnloaded(void* module)
 // should return true if the exception has been handled
 bool Executor::OnException(Exception* exception_record, Context* context_record)
 {
-	if ((exception_record->type == ACCESS_VIOLATION) &&
-		(exception_record->maybe_execute_violation))
+	if (!child_entrypoint_reached)
 	{
-
+		void* main_module_base = GetModuleHandleA(NULL);
+		void* entry_point      = GetModuleEntrypoint(main_module_base);
+		if (entry_point == exception_record->ip)
+		{
+			OnEntrypoint();
+		}
 	}
 	return false;
 }

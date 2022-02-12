@@ -933,17 +933,6 @@ bool TinyDBR::TryExecuteInstrumented(Context* context, char* address)
 	if (!GetRegion(module, (size_t)address))
 		return false;
 
-	// TODO:
-	// move this to Executor class.
-	if (!child_entrypoint_reached)
-	{
-		void* entry_point = GetModuleEntrypoint(module->module_header);
-		if (entry_point == address)
-		{
-			OnEntrypoint();
-		}
-	}
-
 	if (trace_module_entries)
 	{
 		printf("TRACE [%08X]: Entered module %s at address %p\n", 
