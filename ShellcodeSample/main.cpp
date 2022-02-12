@@ -63,27 +63,33 @@ void TestShellcode()
 
 		//QuickSort(number, 0, count - 1);
 
+		// Copy function code.
 		memcpy(code, &QuickSort, 0x256);
 		typedef void (*FnQuickSort)(int number[25], int first, int last);
 		FnQuickSort pfnQuickSort = (FnQuickSort)code;
 
+		// Initialize TinyDBR
 
+		// Give it a dummy module name.
 		char shellcode_name[64] = { 0 };
 		sprintf_s(shellcode_name, "shellcode_0x%X", code);
 
+		// Init module info.
 		TargetModule virtual_module = {};
 		virtual_module.name         = shellcode_name;
 		virtual_module.is_main      = true;
 		virtual_module.is_shellcode = true;
 		virtual_module.code_sections.push_back({ code, code_size });
 
+		// Set shellcode mode to true.
 		Options options        = {};
 		options.shellcode_mode = true;
 
 		auto tinydbr = TinyDBR::GetInstance();
 		tinydbr->Init({ virtual_module }, options);
 
-
+		// After TinyDBR initialization, this call should
+		// be rewrite once it get called.
 		pfnQuickSort(number, 0, count - 1);
 
 		printf("\n\n");
