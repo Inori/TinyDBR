@@ -32,6 +32,8 @@ class Executor : public Singleton<TinyDBR>
 	friend class Singleton<TinyDBR>;
 	friend class UnwindGenerator;
 	friend class ApiHelper;
+	friend class ModuleHelper;
+	friend class ShellcodeHelper;
 #if defined(_WIN64)
 	friend class WinUnwindGenerator;
 #elif __APPLE__
@@ -132,6 +134,7 @@ protected:
 protected:
 	int32_t child_ptr_size           = sizeof(void*);
 	bool    child_entrypoint_reached = false;
+	bool    shellcode_mode           = false;
 
 private:
 	void* InstallVEHHandler();
@@ -163,7 +166,6 @@ private:
 
 private:
 	bool trace_debug_events = false;
-	bool shellcode_mode     = false;
 
 	void*  veh_handle             = nullptr;
 	void*  dll_notify_cookie      = nullptr;
@@ -171,7 +173,7 @@ private:
 	HANDLE self_handle            = NULL;
 	bool   have_thread_context    = false;
 
-	std::vector<std::string>   instrument_modules;
+	std::vector<TargetModule>  instrument_modules;
 	std::mutex                 exception_mutex;
 	std::unique_ptr<ApiHelper> api_helper;
 };

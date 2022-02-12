@@ -17,6 +17,8 @@ Executor::~Executor()
 void Executor::Init(const std::vector<TargetModule>& target_modules,
 					const Options&                   options)
 {
+	instrument_modules = target_modules;
+
 	shellcode_mode     = options.shellcode_mode;
 	trace_debug_events = options.trace_debug_events;
 
@@ -40,11 +42,11 @@ void Executor::Init(const std::vector<TargetModule>& target_modules,
 
 	if (shellcode_mode)
 	{
-		api_helper = std::make_unique<ShellcodeHelper>();
+		api_helper = std::make_unique<ShellcodeHelper>(*this);
 	}
 	else
 	{
-		api_helper = std::make_unique<ModuleHelper>();
+		api_helper = std::make_unique<ModuleHelper>(*this);
 	}
 
 #ifdef _DEBUG	

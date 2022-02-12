@@ -1008,10 +1008,10 @@ void TinyDBR::InstrumentModule(ModuleInfo* module)
 	}
 
 	ExtractAndProtectCodeRanges(module->module_header,
-					  module->min_address,
-					  module->max_address,
-					  &module->executable_ranges,
-					  &module->code_size);
+								module->min_address,
+								module->max_address,
+								&module->executable_ranges,
+								&module->code_size);
 
 	// allocate buffer for instrumented code
 	module->instrumented_code_size = module->code_size * CODE_SIZE_MULTIPLIER;
@@ -1094,13 +1094,23 @@ void TinyDBR::PatchPointersLocalT(char* buf, size_t size, std::unordered_map<siz
 	}
 }
 
-void TinyDBR::InstrumentMainModule(const std::string& module_name)
+void TinyDBR::InstrumentMainModule(const TargetModule& module)
 {
-	auto module_info = IsInstrumentModule(module_name.c_str());
+	auto module_info = IsInstrumentModule(module.name.c_str());
 	if (module_info)
 	{
 		module_info->main_module = true;
-		HANDLE module_handle = GetModuleHandleA(module_name.c_str());
+		void* module_handle      = nullptr;
+
+		if (!shellcode_mode)
+		{
+			module_handle = GetModuleHandleA(module.name.c_str());
+		}
+		else
+		{
+			module_handle = module.code_sections[0].code;
+		}
+		
 		OnInstrumentModuleLoaded(module_handle, module_info);
 		InstrumentModule(module_info);
 	}
@@ -1327,7 +1337,7 @@ void TinyDBR::OnProcessExit()
 
 void TinyDBR::InitUnwindGenerator()
 {
-	if (!generate_unwind)
+	if (!generate_unwind || shellcode_mode)
 	{
 		unwind_generator = new UnwindGenerator(*this);
 	}
@@ -1430,7 +1440,7 @@ void TinyDBR::Init(const std::vector<TargetModule>& target_modules,
 			continue;
 		}
 
-		InstrumentMainModule(mod.name);
+		InstrumentMainModule(mod);
 		break;
 	}
 }

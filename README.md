@@ -25,9 +25,9 @@ Other parts are almost the same as the original TinyInst.
 
 
 ## TODO List:
-1. Refactory the public interface for easy usage.
+1. ~~Refactory the public interface for easy usage.~~ Done.
 2. Remove remote memory backup as we now have only one process.
-3. Support rewrite shellcode without modules.
+3. ~~Support rewrite shellcode without modules.~~ Done.
 4. Support rewrite multiple modules.
 5. Support other platform.
 

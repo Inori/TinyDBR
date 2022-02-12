@@ -1,22 +1,19 @@
 #include "api_helper.h"
 #include <Windows.h>
+#include "executor.h"
+
+ApiHelper::ApiHelper(Executor& executor):
+	m_executor(executor)
+{
+}
 
 ApiHelper::~ApiHelper()
 {
 }
 
-///////////////////////////////////////////////////////////////////
-
-ModuleHelper::ModuleHelper()
-{
-}
-
-ModuleHelper::~ModuleHelper()
-{
-}
-
-
-void ModuleHelper::ExtractAndProtectCodeRanges(void* module_base, size_t min_address, size_t max_address, std::list<AddressRange>* executable_ranges, size_t* code_size)
+void ApiHelper::ExtractAndProtectCodeRanges(
+	void* module_base, size_t min_address, size_t max_address,
+	std::list<AddressRange>* executable_ranges, size_t* code_size)
 {
 	LPCVOID                  end_address = (char*)max_address;
 	LPCVOID                  cur_address = module_base;
@@ -74,7 +71,7 @@ void ModuleHelper::ExtractAndProtectCodeRanges(void* module_base, size_t min_add
 	}
 }
 
-void ModuleHelper::ProtectCodeRanges(std::list<AddressRange>* executable_ranges)
+void ApiHelper::ProtectCodeRanges(std::list<AddressRange>* executable_ranges)
 {
 	MEMORY_BASIC_INFORMATION meminfobuf;
 
@@ -119,6 +116,17 @@ void ModuleHelper::ProtectCodeRanges(std::list<AddressRange>* executable_ranges)
 			FATAL("Error in VirtualProtectEx");
 		}
 	}
+}
+
+///////////////////////////////////////////////////////////////////
+
+ModuleHelper::ModuleHelper(Executor& executor):
+	ApiHelper(executor)
+{
+}
+
+ModuleHelper::~ModuleHelper()
+{
 }
 
 uint32_t ModuleHelper::GetImageSize(void* base_address)
@@ -235,7 +243,8 @@ void ModuleHelper::GetExceptionHandlers(size_t module_header, std::unordered_set
 
 ///////////////////////////////////////////////////////////////////
 
-ShellcodeHelper::ShellcodeHelper()
+ShellcodeHelper::ShellcodeHelper(Executor& executor):
+	ApiHelper(executor)
 {
 }
 
@@ -243,17 +252,20 @@ ShellcodeHelper::~ShellcodeHelper()
 {
 }
 
-void ShellcodeHelper::ExtractAndProtectCodeRanges(void* module_base, size_t min_address, size_t max_address, std::list<AddressRange>* executable_ranges, size_t* code_size)
-{
-}
-
-void ShellcodeHelper::ProtectCodeRanges(std::list<AddressRange>* executable_ranges)
-{
-}
-
 uint32_t ShellcodeHelper::GetImageSize(void* base_address)
 {
-	return 0;
+	const TargetModule* mod = GetModule(base_address);
+	if (!mod)
+	{
+		return 0;
+	}
+
+	uint32_t code_size = 0;
+	for (const auto& sec : mod->code_sections)
+	{
+		code_size += sec.size;
+	}
+	return code_size;
 }
 
 uint32_t ShellcodeHelper::GetProcOffset(void* module, const char* name)
@@ -263,4 +275,21 @@ uint32_t ShellcodeHelper::GetProcOffset(void* module, const char* name)
 
 void ShellcodeHelper::GetExceptionHandlers(size_t module_header, std::unordered_set<size_t>& handlers)
 {
+}
+
+const TargetModule* ShellcodeHelper::GetModule(void* base_address)
+{
+	for (const auto& mod : m_executor.instrument_modules)
+	{
+		const auto& sections = mod.code_sections;
+		for (const auto& sec : sections)
+		{
+			if (sec.code == base_address)
+			{
+				return &mod;
+			}
+		}
+	}
+
+	return nullptr;
 }

@@ -221,7 +221,7 @@ private:
 	void PatchPointersLocalT(char* buf, size_t size, std::unordered_map<size_t, size_t>& search_replace, bool commit_code, ModuleInfo* module);
 	template <typename T>
 	void CommitValueAtomicT(ModuleInfo* module, size_t start_offset);
-	void InstrumentMainModule(const std::string& module_name);
+	void InstrumentMainModule(const TargetModule& module);
 	void InitUnwindGenerator();
 
 private:

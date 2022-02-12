@@ -4,9 +4,13 @@
 #include <unordered_set>
 #include <list>
 
+class Executor;
+
 class ApiHelper
 {
 public:
+	ApiHelper(Executor& executor);
+
 	virtual ~ApiHelper();
 
 	virtual void ExtractAndProtectCodeRanges(
@@ -14,10 +18,10 @@ public:
 		size_t                   min_address,
 		size_t                   max_address,
 		std::list<AddressRange>* executable_ranges,
-		size_t*                  code_size) = 0;
+		size_t*                  code_size);
 
 	virtual void ProtectCodeRanges(
-		std::list<AddressRange>* executable_ranges) = 0;
+		std::list<AddressRange>* executable_ranges);
 
 	virtual uint32_t GetImageSize(void* base_address) = 0;
 
@@ -25,6 +29,9 @@ public:
 
 	virtual void GetExceptionHandlers(
 		size_t module_header, std::unordered_set<size_t>& handlers) = 0;
+
+protected:
+	Executor& m_executor;
 };
 
 ///////////////////////////////////////////////////////////////////
@@ -32,18 +39,8 @@ public:
 class ModuleHelper : public ApiHelper
 {
 public:
-	ModuleHelper();
+	ModuleHelper(Executor& executor);
 	virtual ~ModuleHelper();
-
-	virtual void ExtractAndProtectCodeRanges(
-		void*                    module_base,
-		size_t                   min_address,
-		size_t                   max_address,
-		std::list<AddressRange>* executable_ranges,
-		size_t*                  code_size) override;
-
-	virtual void ProtectCodeRanges(
-		std::list<AddressRange>* executable_ranges) override;
 
 	virtual uint32_t GetImageSize(void* base_address) override;
 
@@ -60,18 +57,8 @@ private:
 class ShellcodeHelper : public ApiHelper
 {
 public:
-	ShellcodeHelper();
+	ShellcodeHelper(Executor& executor);
 	virtual ~ShellcodeHelper();
-
-	virtual void ExtractAndProtectCodeRanges(
-		void*                    module_base,
-		size_t                   min_address,
-		size_t                   max_address,
-		std::list<AddressRange>* executable_ranges,
-		size_t*                  code_size) override;
-
-	virtual void ProtectCodeRanges(
-		std::list<AddressRange>* executable_ranges) override;
 
 	virtual uint32_t GetImageSize(void* base_address) override;
 
@@ -81,5 +68,6 @@ public:
 		size_t module_header, std::unordered_set<size_t>& handlers) override;
 
 private:
+	const TargetModule* GetModule(void* base_address);
 };
 

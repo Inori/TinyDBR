@@ -48,7 +48,6 @@ void TestShellcode()
 			break;
 		}
 
-
 		int i = 0, count = 25, number[25];
 
 		for (i = 0; i < count; i++)
@@ -67,6 +66,24 @@ void TestShellcode()
 		memcpy(code, &QuickSort, 0x256);
 		typedef void (*FnQuickSort)(int number[25], int first, int last);
 		FnQuickSort pfnQuickSort = (FnQuickSort)code;
+
+
+		char shellcode_name[64] = { 0 };
+		sprintf_s(shellcode_name, "shellcode_0x%X", code);
+
+		TargetModule virtual_module = {};
+		virtual_module.name         = shellcode_name;
+		virtual_module.is_main      = true;
+		virtual_module.is_shellcode = true;
+		virtual_module.code_sections.push_back({ code, code_size });
+
+		Options options        = {};
+		options.shellcode_mode = true;
+
+		auto tinydbr = TinyDBR::GetInstance();
+		tinydbr->Init({ virtual_module }, options);
+
+
 		pfnQuickSort(number, 0, count - 1);
 
 		printf("\n\n");
