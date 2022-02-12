@@ -14,7 +14,8 @@ Executor::~Executor()
 {
 }
 
-void Executor::Init(const std::vector<std::string>& instrument_module_names)
+void Executor::Init(const std::vector<TargetModule>& target_modules,
+					const Options&                   options)
 {
 	veh_handle        = InstallVEHHandler();
 	dll_notify_cookie = InstallDllNotification(&Executor::DllNotificationHandler, this);
@@ -31,11 +32,16 @@ void Executor::Init(const std::vector<std::string>& instrument_module_names)
 	GetSystemInfo(&system_info);
 	allocation_granularity = system_info.dwAllocationGranularity;
 
+	trace_debug_events = options.trace_debug_events;
+
+#ifdef _DEBUG	
 	AllocConsole();
 	FILE* fDummy;
 	freopen_s(&fDummy, "CONIN$", "r", stdin);
 	freopen_s(&fDummy, "CONOUT$", "w", stderr);
 	freopen_s(&fDummy, "CONOUT$", "w", stdout);
+#endif
+
 }
 
 void Executor::Unit()

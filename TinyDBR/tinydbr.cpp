@@ -1325,107 +1325,8 @@ void TinyDBR::OnProcessExit()
 	ClearCrossModuleLinks();
 }
 
-// initializes instrumentation from command line options
-void TinyDBR::Init(const std::vector<std::string>& instrument_module_names)
+void TinyDBR::InitUnwindGenerator()
 {
-	// init the executor first
-	Executor::Init(instrument_module_names);
-
-	if (instrument_module_names.empty())
-	{
-		return;
-	}
-
-#ifdef ARM64
-	assembler_ = new Arm64Assembler(*this);
-#else
-	assembler_ = new X86Assembler(*this);
-#endif
-	assembler_->Init();
-
-	instrumentation_disabled = false;
-
-	//instrument_modules_on_load = GetBinaryOption("-instrument_modules_on_load", argc, argv, false);
-	//patch_return_addresses = GetBinaryOption("-patch_return_addresses", argc, argv, false);
-	//instrument_cross_module_calls = GetBinaryOption("-instrument_cross_module_calls", argc, argv, true);
-	//persist_instrumentation_data = GetBinaryOption("-persist_instrumentation_data", argc, argv, true);
-
-	//trace_basic_blocks = GetBinaryOption("-trace_basic_blocks", argc, argv, false);
-	//trace_module_entries = GetBinaryOption("-trace_module_entries", argc, argv, false);
-
-	instrument_modules_on_load    = false;
-	patch_return_addresses        = false;
-	instrument_cross_module_calls = true;
-	persist_instrumentation_data  = true;
-
-	trace_basic_blocks   = false;
-	trace_module_entries = true;
-
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) || defined(ARM64)
-	sp_offset = 0;
-#else
-	// According to System V AMD64 ABI:
-	// "For leaf-node functions a 128-byte space is stored just beneath
-	// the stack pointer of the function. The space is called the red zone.
-	// This zone will not be clobbered by any signal or interrupt handlers.
-	// Compilers can thus utilize this zone to save local variables."
-	// We set sp_offset to more than that just to be on the safe side.
-	sp_offset = 256;
-#endif
-
-	// sp_offset = GetIntOption("-stack_offset", argc, argv, sp_offset);
-	sp_offset = 0;
-
-	//GetOptionAll("-instrument_module", argc, argv, &module_names);
-	for (auto iter = instrument_module_names.begin(); iter != instrument_module_names.end(); iter++)
-	{
-		ModuleInfo* new_module  = new ModuleInfo();
-		new_module->module_name = *iter;
-		instrumented_modules.push_back(new_module);
-	}
-
-	//char *option;
-
-	indirect_instrumentation_mode = II_AUTO;
-	//option = GetOption("-indirect_instrumentation", argc, argv);
-	//if (option) {
-	//  if (strcmp(option, "none") == 0)
-	//    indirect_instrumentation_mode = II_NONE;
-	//  else if (strcmp(option, "local") == 0)
-	//    indirect_instrumentation_mode = II_LOCAL;
-	//  else if (strcmp(option, "global") == 0)
-	//    indirect_instrumentation_mode = II_GLOBAL;
-	//  else if (strcmp(option, "auto") == 0)
-	//    indirect_instrumentation_mode = II_AUTO;
-	//  else
-	//    FATAL("Unknown indirect instrumentation mode");
-	//}
-
-	patch_module_entries = PatchModuleEntriesValue::OFF;
-	//option = GetOption("-patch_module_entries", argc, argv);
-	//if (option) {
-	//  if (strcmp(option, "off") == 0)
-	//    patch_module_entries = PatchModuleEntriesValue::OFF;
-	//  else if (strcmp(option, "data") == 0)
-	//    patch_module_entries = PatchModuleEntriesValue::DATA;
-	//  else if (strcmp(option, "code") == 0)
-	//    patch_module_entries = PatchModuleEntriesValue::CODE;
-	//  else if (strcmp(option, "all") == 0)
-	//    patch_module_entries = PatchModuleEntriesValue::ALL;
-	//  else
-	//    FATAL("Unknown -patch_module_entries value");
-	//}
-
-	// generate_unwind = GetBinaryOption("-generate_unwind", argc, argv, false);
-	generate_unwind = true;
-
-	// if patch_return_addresses is on, disable generate_unwind
-	// regardless of the flag
-	if (patch_return_addresses)
-	{
-		generate_unwind = false;
-	}
-
 	if (!generate_unwind)
 	{
 		unwind_generator = new UnwindGenerator(*this);
@@ -1442,6 +1343,109 @@ void TinyDBR::Init(const std::vector<std::string>& instrument_module_names)
 #endif
 	}
 	unwind_generator->Init();
+}
 
-	InstrumentMainModule(instrument_module_names[0]);
+// initializes instrumentation from command line options
+void TinyDBR::Init(const std::vector<TargetModule>& target_modules,
+				   const Options&                   options)
+{
+	// init the executor first
+	Executor::Init(target_modules, options);
+
+	if (target_modules.empty())
+	{
+		return;
+	}
+
+#ifdef ARM64
+	assembler_ = new Arm64Assembler(*this);
+#else
+	assembler_ = new X86Assembler(*this);
+#endif
+	assembler_->Init();
+
+	instrumentation_disabled = false;
+
+	instrument_modules_on_load    = options.instrument_modules_on_load;
+	patch_return_addresses        = options.patch_return_addresses;
+	instrument_cross_module_calls = options.instrument_cross_module_calls;
+	persist_instrumentation_data  = options.persist_instrumentation_data;
+
+	trace_basic_blocks   = options.trace_basic_blocks;
+	trace_module_entries = options.trace_module_entries;
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) || defined(ARM64)
+	sp_offset = 0;
+#else
+	// According to System V AMD64 ABI:
+	// "For leaf-node functions a 128-byte space is stored just beneath
+	// the stack pointer of the function. The space is called the red zone.
+	// This zone will not be clobbered by any signal or interrupt handlers.
+	// Compilers can thus utilize this zone to save local variables."
+	// We set sp_offset to more than that just to be on the safe side.
+	sp_offset = 256;
+#endif
+
+	sp_offset = options.sp_offset;
+
+	for (const auto& module : target_modules)
+	{
+		ModuleInfo* new_module  = new ModuleInfo();
+		new_module->module_name = module.name;
+		instrumented_modules.push_back(new_module);
+	}
+
+	indirect_instrumentation_mode = II_AUTO;
+
+	patch_module_entries = PatchModuleEntriesValue::OFF;
+	//option = GetOption("-patch_module_entries", argc, argv);
+	//if (option) {
+	//  if (strcmp(option, "off") == 0)
+	//    patch_module_entries = PatchModuleEntriesValue::OFF;
+	//  else if (strcmp(option, "data") == 0)
+	//    patch_module_entries = PatchModuleEntriesValue::DATA;
+	//  else if (strcmp(option, "code") == 0)
+	//    patch_module_entries = PatchModuleEntriesValue::CODE;
+	//  else if (strcmp(option, "all") == 0)
+	//    patch_module_entries = PatchModuleEntriesValue::ALL;
+	//  else
+	//    FATAL("Unknown -patch_module_entries value");
+	//}
+
+	generate_unwind = options.generate_unwind;
+
+	// if patch_return_addresses is on, disable generate_unwind
+	// regardless of the flag
+	if (patch_return_addresses)
+	{
+		generate_unwind = false;
+	}
+
+	InitUnwindGenerator();
+
+	for (const auto& mod : target_modules)
+	{
+		if (!mod.is_main)
+		{
+			continue;
+		}
+
+		InstrumentMainModule(mod.name);
+		break;
+	}
+}
+
+void TinyDBR::Unit()
+{
+	Executor::Unit();
+}
+
+void TinyDBR::EnableInstrumentation()
+{
+	instrumentation_disabled = false;
+}
+
+void TinyDBR::DisableInstrumentation()
+{
+	instrumentation_disabled = true;
 }

@@ -36,7 +36,7 @@ std::string GetExeName()
 	return name;
 }
 
-void ReWriteModule()
+void InitRewrite()
 {
 	do
 	{
@@ -48,9 +48,20 @@ void ReWriteModule()
 
 		auto tinydbr = TinyDBR::GetInstance();
 
-		tinydbr->Init({ module_name });
+		TargetModule main_module = {};
+		main_module.name         = module_name;
+		main_module.is_main      = true;
+
+		Options options          = {};
+		tinydbr->Init({ main_module }, options);
 
 	} while (false);
+}
+
+void UnitRewrite()
+{
+	auto tinydbr = TinyDBR::GetInstance();
+	tinydbr->Unit();
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule,
@@ -60,11 +71,13 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
-		ReWriteModule();
+		InitRewrite();
 		break;
 	case DLL_THREAD_ATTACH:
 	case DLL_THREAD_DETACH:
+		break;
 	case DLL_PROCESS_DETACH:
+		UnitRewrite();
 		break;
 	}
 	return TRUE;

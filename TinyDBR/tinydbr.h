@@ -67,18 +67,15 @@ enum InstructionResult
 class TinyDBR : public Executor
 {
 public:
-	virtual void Init(
-		const std::vector<std::string>& instrument_module_names) override;
+	virtual void Init(const std::vector<TargetModule>& target_modules,
+					  const Options&                   options) override;
 
-	void EnableInstrumentation()
-	{
-		instrumentation_disabled = false;
-	}
 
-	void DisableInstrumentation()
-	{
-		instrumentation_disabled = true;
-	}
+	virtual void Unit() override;
+
+	void EnableInstrumentation();
+
+	void DisableInstrumentation();
 
 protected:
 	enum IndirectInstrumentation
@@ -164,7 +161,7 @@ protected:
 	virtual void     OnReturnAddress(ModuleInfo* module, size_t original_address, size_t translated_address);
 
 private:
-	bool HandleBreakpoint(void* address, Context* context);
+	bool        HandleBreakpoint(void* address, Context* context);
 	void        OnInstrumentModuleLoaded(void* module, ModuleInfo* target_module);
 	ModuleInfo* IsInstrumentModule(const char* module_name);
 	void        InstrumentAllLoadedModules();
@@ -225,6 +222,7 @@ private:
 	template <typename T>
 	void CommitValueAtomicT(ModuleInfo* module, size_t start_offset);
 	void InstrumentMainModule(const std::string& module_name);
+	void InitUnwindGenerator();
 
 private:
 	IndirectInstrumentation indirect_instrumentation_mode;

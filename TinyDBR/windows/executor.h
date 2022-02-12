@@ -39,8 +39,8 @@ public:
 	Executor();
 	virtual ~Executor();
 
-	// First module in array must be the main executable module.
-	virtual void Init(const std::vector<std::string>& instrument_module_names);
+	virtual void Init(const std::vector<TargetModule>& target_modules,
+					  const Options&                   options);
 
 	virtual void Unit();
 
