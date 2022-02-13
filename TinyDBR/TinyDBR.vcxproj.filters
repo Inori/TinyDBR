@@ -39,6 +39,9 @@
     <ClCompile Include="windows\api_helper.cpp">
       <Filter>Source Files\windows</Filter>
     </ClCompile>
+    <ClCompile Include="memory_monitor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="windows\executor.h">
@@ -79,6 +82,9 @@
     </ClInclude>
     <ClInclude Include="windows\api_helper.h">
       <Filter>Source Files\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="memory_monitor.h">
+      <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
