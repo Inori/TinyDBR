@@ -56,7 +56,7 @@ def cexit(r=0):
 
 def write_file(fn, stream):
     """Write stream to fn"""
-    mbuild.msgb("WRITING", fn)
+    mbuild.vmsgb(1, "WRITING", fn)
     f = open(fn,'w')
     f.writelines(stream)
     f.close()
@@ -217,7 +217,6 @@ def set_env_gnu(env):
     #env['LIBS'] += ' -lgcov'
     
     flags += ' -Wall'
-    flags += ' -Wformat-security'
     # the windows compiler finds this stuff so flag it on other platforms
     flags += ' -Wunused' 
     
@@ -248,9 +247,14 @@ def set_env_gnu(env):
     #if env.on_mac():
     #    flags += ' -fno-common'
 
-    if env['build_os'] == 'win':
+    if env['build_os'] == 'win' or _greater_than_gcc(env,4,9,0):
+        flags += ' -Wformat-security'
+        flags += ' -Wformat'
+    else:
         # gcc3.4.4 on windows has problems with %x for xed_int32_t.
-        flags += ' -Wno-format' 
+        # gcc4.9.2 works well.
+        flags += ' -Wno-format'
+        flags += ' -Wno-format-security'
 
     if env['compiler'] != 'icc':
         # c99 is required for c++ style comments.
@@ -407,6 +411,11 @@ def init_once(env):
 def init(env):
     # we make the python command contingent upon the mfile itself to catch
     # build changes.
+    
+    if 'init' in env and env['init']:
+        return
+    env['init']=True
+    
     env['mfile'] = env.src_dir_join('mfile.py')
     env['arch'] = get_arch(env)
     
@@ -527,8 +536,8 @@ def dump_lines(s,lines):
 
 
 def prep(env):
-    mbuild.msgb("PYTHON VERSION", "%d.%d.%d" %
-                (mbuild.get_python_version_tuple()))
+    mbuild.vmsgb(1, "PYTHON VERSION", "%d.%d.%d" %
+                 (mbuild.get_python_version_tuple()))
 
 
 ###########################################################################
@@ -543,20 +552,22 @@ def _use_elf_dwarf(env):
    env.add_define('XED_DWARF')
    env['LIBS'] += ' -ldwarf'
 
+
 def _add_elf_dwarf_precompiled(env):
    """Do not call this directly. See cond_add_elf_dwarf.  Set up to
    use our precompiled libelf/libdwarf. """
+   
+   env.add_include_dir('%(xedext_dir)s/external/include')
+   env.add_include_dir('%(xedext_dir)s/external/include/libelf')
 
-   # not using src_dir here because examples have different src_dir
-   env.add_include_dir('%(xed_dir)s/external/include')
-   env.add_include_dir('%(xed_dir)s/external/include/libelf')
-
-   env['extern_lib_dir']  = '%(xed_dir)s/external/lin/lib%(arch)s'
+   env.add_define('XED_PRECOMPILED_ELF_DWARF')
+   
+   env['extern_lib_dir']  = '%(xedext_dir)s/external/lin/lib%(arch)s'
 
    env['libdwarf'] = '%(extern_lib_dir)s/libdwarf.so'
    env['libelf']   = env.expand('%(extern_lib_dir)s/libelf.so.0.8.13')
    env['libelf_symlink'] = 'libelf.so.0'
-   env['libelf_license'] = env.expand('%(extern_lib_dir)s/EXTLICENSE.txt')
+   env['libelf_license'] = env.expand('%(xedext_dir)s/external/EXTLICENSE.txt')
    if env.on_freebsd():
       env['LINKFLAGS'] += " -Wl,-z,origin"
 
@@ -588,11 +599,11 @@ def cond_add_elf_dwarf(env):
    # set up the preprocessor define and linker requirements.
    _use_elf_dwarf(env)
 
-   if not env['use_elf_dwarf_precompiled']:
-      # presumably the user is supplying their own & setting rpaths, etc.
-      return
-   mbuild.msgb("ADDING ELF/DWARF PRECOMPILED")
-   _add_elf_dwarf_precompiled(env)
+   if env['use_elf_dwarf_precompiled']:
+      mbuild.msgb("ADDING ELF/DWARF PRECOMPILED")
+      _add_elf_dwarf_precompiled(env)
+   else:
+      env.add_include_dir('/usr/include/libdwarf')
 
 #    
 ###########################################################################

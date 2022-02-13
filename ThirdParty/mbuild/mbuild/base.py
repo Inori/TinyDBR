@@ -87,11 +87,16 @@ def msgb(s,t='',pad=''):
   """a bracketed  string s  sent to stdout, followed by a string t"""
   msg(bracket(s,t), pad=pad)
 
+def vmsg(v,s,pad=''):
+  """If verbosity v is sufficient, emit s to stdout with a newline"""
+  # someone could pass unicode as pad...
+  if verbose(v):
+    msg(s,pad=pad)
+
 def vmsgb(v,s,t='',pad=''):
   """If verbosity v is sufficient, emit a bracketed string s sent to
   stdout, followed by a string t"""
-  if verbose(v):
-    msg(bracket(s,t),pad=pad)
+  vmsg(v,bracket(s,t),pad=pad)
 
 def cond_die(v, cmd, msg):
   """Conditionally die, if v is not zero. Print the msg and the cmd.

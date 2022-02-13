@@ -40,7 +40,7 @@ from . import msvs
 def _remove_libname(args,env):
     #lib = env.expand('%(LIBNAME)s')
     lib = args[0]
-    msgb("REMOVING", lib)
+    vmsgb(1, "REMOVING", lib)
     util.remove_file(lib)
     return (0,['REMOVED %s\n' % ( lib )])
 
@@ -345,7 +345,7 @@ class env_t(object):
         if self._emitted_startup_msg:
             return
         self._emitted_startup_msg = True
-        if verbose(1):
+        if verbose(2):
             msgb("INVOKED", " ".join(sys.argv))
             msgb("START TIME", self.env['start_time_str'])
             msgb("CURRENT DIRECTORY", os.getcwd())
@@ -1024,7 +1024,7 @@ class env_t(object):
                      'Setting jobs to 1 because we could not detect' + 
                      ' the number of CPUs')
                 
-        if verbose(1):
+        if verbose(2):
             # print host_cpu here because it may be overridden for
             # cross compilations
             msgb("HOST_CPU", self.env['host_cpu'])
@@ -1235,7 +1235,7 @@ class env_t(object):
             return 'x86-64'
         elif name[0:3] == 'x86':
             return 'ia32'
-        elif name == 'aarch64':
+        elif name in ['aarch64', 'arm64']:
             return 'aarch64'
         else:
             die("Unknown cpu " + name)
@@ -1317,7 +1317,7 @@ class env_t(object):
             die("Compiler family not recognized. Need gnu or ms")
 
         if self.env['use_yasm']:
-            if verbose(1):
+            if verbose(2):
                 msgb("USE YASM")
             build_env.yasm_support(self)
 

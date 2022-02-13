@@ -2,7 +2,7 @@
 # -*- python -*-
 #BEGIN_LEGAL
 #
-#Copyright (c) 2019 Intel Corporation
+#Copyright (c) 2021 Intel Corporation
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -136,9 +136,9 @@ class generator_inputs_t(object):
         elif curp < priority:
            # new higher priority file blows away the list of files for
            # this file type.
-           mbuild.msgb("Clearing file list for type %s: [ %s ]" % 
-                       (file_type, 
-                        ", ".join(self.files[file_type])))
+           mbuild.vmsgb(1, "Clearing file list for type %s: [ %s ]" %
+                        (file_type,
+                         ", ".join(self.files[file_type])))
            self.files[file_type] = []
            self.priority[file_type]=priority
 
@@ -255,8 +255,7 @@ class generator_inputs_t(object):
     def concatenate_one_set_of_files(self, env, target, inputs):
         """Concatenate input files creating the target file."""
         try:
-            if mbuild.verbose(1):
-                mbuild.msgb("CONCAT", "%s <-\n\t\t%s" % (target ,
+            mbuild.vmsgb(2, "CONCAT", "%s <-\n\t\t%s" % (target ,
                                                          '\n\t\t'.join(inputs)))
             output = open(target,"w")
             for f in inputs:
@@ -314,12 +313,13 @@ def run_decode_generator(gc, env):
     
     if env['compress_operands']:
         gen_extra_args += " --compress-operands" 
+    if env['add_orphan_inst_to_future_chip']:
+        gen_extra_args += " --add-orphan-inst-to-future-chip"
         
     cmd = env.expand(gc.decode_command(xedsrc, gen_extra_args))
 
 
-    if mbuild.verbose(2):
-        mbuild.msgb("DEC-GEN", cmd)
+    mbuild.vmsgb(3, "DEC-GEN", cmd)
     (retval, output, error_output) = mbuild.run_command(cmd,
                                                         separate_stderr=True)
     oo = env.build_dir_join('DEC-OUT.txt')
@@ -331,7 +331,7 @@ def run_decode_generator(gc, env):
         list_of_files = read_file_list(gc.dec_output_file)
         mbuild.hash_files(list_of_files, gc.dec_hash_file)
 
-    mbuild.msgb("DEC-GEN", "Return code: " + str(retval))
+    mbuild.vmsgb(1, "DEC-GEN", "Return code: " + str(retval))
     return (retval, error_output )
 
 def run_encode_generator(gc, env):
@@ -348,8 +348,7 @@ def run_encode_generator(gc, env):
                                        gen_extra_args,
                                        env['amd_enabled'],
                                        env['encoder_chip']))
-    if mbuild.verbose(2):
-        mbuild.msgb("ENC-GEN", cmd)
+    mbuild.vmsgb(3, "ENC-GEN", cmd)
     (retval, output, error_output) = mbuild.run_command(cmd,
                                                         separate_stderr=True)
     oo = env.build_dir_join('ENC-OUT.txt')
@@ -361,7 +360,7 @@ def run_encode_generator(gc, env):
         list_of_files = read_file_list(gc.enc_output_file)
         mbuild.hash_files(list_of_files, gc.enc_hash_file)
 
-    mbuild.msgb("ENC-GEN", "Return code: " + str(retval))
+    mbuild.vmsgb(1, "ENC-GEN", "Return code: " + str(retval))
     return (retval, [] )
 
 def _encode_command2(args):
@@ -389,8 +388,7 @@ def run_encode_generator2(args, env):
         
     cmd = env.expand( _encode_command2(args) )
 
-    if mbuild.verbose(2):
-        mbuild.msgb("ENC2-GEN", cmd)
+    mbuild.vmsgb(3, "ENC2-GEN", cmd)
     (retval, output, error_output) = mbuild.run_command(cmd,
                                                         separate_stderr=True)
     oo = env.build_dir_join('ENC2-OUT.txt')
@@ -402,7 +400,7 @@ def run_encode_generator2(args, env):
         list_of_files = read_file_list(args.enc2_output_file)
         mbuild.hash_files(list_of_files, args.enc2_hash_file)
 
-    mbuild.msgb("ENC2-GEN", "Return code: " + str(retval))
+    mbuild.vmsgb(1, "ENC2-GEN", "Return code: " + str(retval))
     return (retval, [] )
 
 
@@ -634,8 +632,9 @@ def mkenv():
                                  limit_strings=False,
                                  strip='strip',
                                  pti_test=False,
-                                 verbose = 0,
+                                 verbose = 1,
                                  compress_operands=False,
+                                 add_orphan_inst_to_future_chip=False,
                                  test_perf=False,
                                  example_linkflags='',
                                  example_flags='',
@@ -924,6 +923,10 @@ def xed_args(env):
                           dest="compress_operands",
                           help="use bit-fields to compress the "+
                           "operand storage.")
+    env.parser.add_option("--add-orphan-inst-to-future-chip", 
+                          action="store_true",
+                          dest="add_orphan_inst_to_future_chip",
+                          help="Add orphan isa-sets to future chip definition.")
     env.parser.add_option("--test-perf", 
                           action="store_true",
                           dest="test_perf",
@@ -995,8 +998,7 @@ def init(env):
                           "\n\t" + "\n\t".join(python_commands))
                 
     env['pythonarg'] = aq(python_command)
-    if mbuild.verbose(2):
-        mbuild.msgb("PYTHON", env['pythonarg'])
+    mbuild.vmsgb(3, "PYTHON", env['pythonarg'])
 
     xbc.init(env)
     
@@ -1032,7 +1034,7 @@ def init(env):
 
 def _wk_show_errors_only():
     #True means show errors only when building.
-    if mbuild.verbose(1):
+    if mbuild.verbose(2):
         return False # show output
     return True # show errors only.
 
@@ -1163,7 +1165,7 @@ def _parse_extf_files_new(env, gc):
 
     dup_check = {}
     for ext_file in env['extf']:
-        mbuild.msgb("EXTF PROCESSING", ext_file)
+        mbuild.vmsgb(1, "EXTF PROCESSING", ext_file)
         if not os.path.exists(ext_file):
             xbc.cdie("Cannot open extension configuration file: %s" % 
                        ext_file)
@@ -1199,9 +1201,11 @@ def _parse_extf_files_new(env, gc):
                     ptype = _get_check(wrds,1)
                     fname = _fn_expand(env, edir, _get_check(wrds,2))
                     priority =  int(_get_check(wrds,3, default=1))
-                    print("CONSIDERING SOURCE", fname, ptype, priority)
+                    mbuild.vmsgb(1, "CONSIDERING SOURCE",
+                                 '{} {} {}'.format(fname, ptype, priority))
                     if source_prio[ptype] < priority:
-                        print("ADDING SOURCE", fname, ptype, priority)
+                        mbuild.vmsgb(1, "ADDING SOURCE",
+                                     '{} {} {}'.format(fname, ptype, priority))
                         source_prio[ptype] = priority
                         sources_dict[ptype] = fname
                 elif cmd == 'replace-source':
@@ -1348,7 +1352,8 @@ def _configure_libxed_extensions(env):
     _add_normal_ext(env,'movdir')
     _add_normal_ext(env,'waitpkg')
     _add_normal_ext(env,'cldemote')
-    _add_normal_ext(env,'sgx-enclv') 
+    if not env['knc']:
+        _add_normal_ext(env,'sgx-enclv') 
 
     if env['avx']:
         _add_normal_ext(env,'avx')
@@ -1437,6 +1442,9 @@ def _configure_libxed_extensions(env):
             _add_normal_ext(env,'enqcmd')
             _add_normal_ext(env,'tsx-ldtrk')
             _add_normal_ext(env,'serialize')
+            _add_normal_ext(env,'tdx')
+            _add_normal_ext(env,'avx512-fp16')
+            _add_normal_ext(env,'evex-map5-6')
             
         if env['future']: 
             _add_normal_ext(env,'future')
@@ -1683,11 +1691,10 @@ def build_libxed(env,work_queue):
 
         if not okay:
             xbc.cdie("[%s] failed. dying..." % phase)
-        if mbuild.verbose(2):
-            mbuild.msgb(phase, "succeeded")
+        mbuild.vmsgb(3, phase, "succeeded")
 
     if 'just-gen' in env['targets']:
-        mbuild.msgb("STOPPING", "after %s" % phase)
+        mbuild.vmsgb(1, "STOPPING", "after %s" % phase)
         xbc.cexit(1)
 
     #########################################################################
@@ -1762,7 +1769,7 @@ def build_libxed(env,work_queue):
     if lib_dag.cycle_check():
         xbc.cdie("Circularities in dag...")
     if 'skip-lib' in env['targets']:
-        mbuild.msgb("SKIPPING LIBRARY BUILD")
+        mbuild.vmsgb(1, "SKIPPING LIBRARY BUILD")
     else:
         okay = wq_build(env, work_queue, lib_dag)
         if okay and env['shared'] and not env['debug']:
@@ -1771,8 +1778,7 @@ def build_libxed(env,work_queue):
                 xbc.strip_file(lib_env, env['shd_libild'], '-x')
         if not okay:
             xbc.cdie("Library build failed")
-        if mbuild.verbose(2):
-            mbuild.msgb("LIBRARY", "build succeeded")
+        mbuild.vmsgb(3, "LIBRARY", "build succeeded")
 
     del lib_env
     input_files = gc.all_input_files() + prep.targets
@@ -1795,8 +1801,7 @@ def build_libxedenc2(arg_env, work_queue, input_files, config):
     add_encoder2_command(env, dag, input_files, config)
 
     phase = "ENCODE2 GENERATOR FOR CONFIGURATION {}".format(config)
-    if mbuild.verbose(2):
-        mbuild.msgb(phase, "building...")
+    mbuild.vmsgb(3, phase, "building...")
     okay = wq_build(env, work_queue, dag)
     if not okay:
         xbc.cdie("[%s] failed. dying..." % phase)
@@ -1847,8 +1852,7 @@ def build_libxedenc2(arg_env, work_queue, input_files, config):
     okay = wq_build(env, work_queue, dag)
     if not okay:
         xbc.cdie("XED ENC2Library build failed")
-    if mbuild.verbose(2):
-        mbuild.msgb("LIBRARY", "XED ENC2 build succeeded")
+    mbuild.vmsgb(3, "LIBRARY", "XED ENC2 build succeeded")
 
     if env['enc2_test']:
         build_enc2_test(env, work_queue, config)
@@ -1879,15 +1883,13 @@ def build_enc2_test(arg_env, work_queue, config):
     
     lc = env.link(objs + [ env['link_chk_lib'], env['link_enc2_lib'], env['link_libxed']], exe)
     cmd = dag.add(env,lc)
-    if mbuild.verbose(2):
-        mbuild.msgb('BUILDING', "ENC2 config {} test program".format(config))
+    mbuild.vmsgb(3, 'BUILDING', "ENC2 config {} test program".format(config))
     okay = wq_build(env, work_queue, dag)
     if not okay:
         xbc.cdie("XED ENC2 config {} test program build failed".format(config))
     if env.on_mac() and env['shared']:
         _modify_search_path_mac(env, exe, '@loader_path/../wkit/lib')
-    if mbuild.verbose(2):
-        mbuild.msgb("TESTPROG", "XED ENC2 config {} test program build succeeded".format(config))
+    mbuild.vmsgb(3, "TESTPROG", "XED ENC2 config {} test program build succeeded".format(config))
 
 def _modify_search_path_mac(env, fn, tgt=None):
    """Make example tools refer to the libxed.so from the lib directory
@@ -2034,11 +2036,12 @@ def _copy_dynamic_libs_to_kit(env,xkit):
     mbuild.cmkdir(xkit.extlib)
     executables = mbuild.glob(xkit.bin,'*')
 
-    if 'extern_lib_dir' not in env:
-        env['extern_lib_dir']  = '%(xed_dir)s/external/lin/lib%(arch)s'
-        
-    extra_ld_library_paths = (env['ld_library_path'] +
-                              [ env.expand('%(extern_lib_dir)s')])
+    extra_ld_library_paths = env['ld_library_path']    
+    if env['use_elf_dwarf_precompiled']:
+        if 'extern_lib_dir' not in env:
+            env['extern_lib_dir']  = '%(xedext_dir)s/external/lin/lib%(arch)s'
+
+        extra_ld_library_paths.append( env.expand('%(extern_lib_dir)s') )
 
     # run LDD to find the shared libs and do the copies
     okay = external_libs.copy_system_libraries(env,
@@ -2053,26 +2056,7 @@ def _copy_dynamic_libs_to_kit(env,xkit):
         env2 = copy.deepcopy(env)
         xbc.cond_add_elf_dwarf(env2)
         mbuild.copy_file(env2['libelf_license'], xkit.extlib)
-        
 
-def copy_ext_libs_to_kit(env,dest): # 2014-12-02: currently unused
-    if not env['use_elf_dwarf_precompiled']:
-       return
-
-    extlib = mbuild.join(dest,"extlib")
-    mbuild.cmkdir(extlib)
-
-    env2 = copy.deepcopy(env)
-    xbc.cond_add_elf_dwarf(env2)
- 
-    for f in env2['ext_libs']:
-        mbuild.copy_file(env2.expand(f),extlib)
-    existing_file_name = os.path.basename(env2['libelf'])
-    dest_path_and_link = mbuild.join(extlib,env2['libelf_symlink'])
-    if os.path.exists(dest_path_and_link):
-        mbuild.remove_file(dest_path_and_link)
-    mbuild.symlink(env, existing_file_name, dest_path_and_link)
-    mbuild.copy_file(env2['libelf_license'], extlib)
 
 def apply_legal_header2(fn, legal_header):
 
@@ -2088,8 +2072,7 @@ def apply_legal_header2(fn, legal_header):
     except:
        xbc.cdie("XED ERROR: mfile.py could not find scripts directory")
        
-    if mbuild.verbose(2):
-        mbuild.msgb("HEADER TAG", fn)
+    mbuild.vmsgb(3, "HEADER TAG", fn)
 
     if _c_source(fn):
         apply_legal_header.apply_header_to_source_file(legal_header,fn)
@@ -2161,8 +2144,7 @@ def _apply_legal_header_to_headers(env,dest):
     legal_header = _get_legal_header(env)
 
     for h in  mbuild.glob(dest,'*.[Hh]'):
-        if mbuild.verbose(2):
-            mbuild.msgb("HEADER TAG", h)
+        mbuild.vmsgb(3, "HEADER TAG", h)
         apply_legal_header2(h, legal_header)
 
                                                  
@@ -2485,19 +2467,19 @@ def emit_defines_header(env):
     
     fn = env.build_dir_join(output_file_name)
     if mbuild.hash_list(klist) != mbuild.hash_file(fn):
-        mbuild.msgb("EMIT BUILD DEFINES HEADER FILE")
+        mbuild.vmsgb(1, "EMIT BUILD DEFINES HEADER FILE")
         f = open(fn,"w")
         for line in klist:
             f.write(line)
         f.close()
     else:
-        mbuild.msgb("REUSING BUILD DEFINES HEADER FILE")
+        mbuild.vmsgb(1, "REUSING BUILD DEFINES HEADER FILE")
 
 def update_version(env):
    new_rev = get_git_version(env)
    date = time.strftime("%Y-%m-%d")
    if new_rev:
-      mbuild.msgb("GIT VERSION", new_rev)
+      mbuild.vmsgb(1, "GIT VERSION", new_rev)
    else:
       new_rev = "000"
       mbuild.warn("Could not find GIT revision number")
@@ -2593,8 +2575,7 @@ def _run_canned_tests(env,osenv):
 
     output_file = env.build_dir_join('TEST.OUT.txt')
     cmd  = env.expand_string(cmd)
-    if mbuild.verbose(1):
-        mbuild.msgb("TEST COMMAND", "%s > %s" %(cmd,str(output_file)))
+    mbuild.vmsgb(2, "TEST COMMAND", "%s > %s" %(cmd,str(output_file)))
     (retcode, stdout, stderr) = mbuild.run_command_output_file(cmd,
                                                                output_file,
                                                                osenv=osenv)
@@ -2713,6 +2694,21 @@ def verify_args(env):
        
 
 def macro_args(env):
+
+    # undefined behavior sanitizer
+    #
+    # 2021-05-13: xed has several locations where it dereferences
+    #  unaligned pointers for 16/32/64 displacements & immediates. The
+    #  code generated by clang -O3 is worse for these cases when using
+    #  legal C. Thinking about how to handle that.
+    
+    
+    if  (env.on_linux()  or env.on_mac()) and 0:
+        fcmd = '-fsanitize=undefined  -fstrict-aliasing'
+        env.add_to_var('CXXFLAGS', fcmd)
+        env.add_to_var('CCFLAGS', fcmd)
+        env.add_to_var('LINKFLAGS', fcmd)
+
     if env.on_linux() and env['asan']:
         fcmd = '-fsanitize=address'
         env.add_to_var('CXXFLAGS', fcmd)
@@ -2779,16 +2775,16 @@ def work(env):
     # kit if installing.
     create_doxygen_api_documentation(env, work_queue)
     compress_kit(env)
-    mbuild.msgb("XED KIT BUILD COMPLETE")
+    mbuild.vmsgb(1, "XED KIT BUILD COMPLETE")
     
     system_install(env,work_queue) # like in /usr/local/{lib,include/xed}
     make_doxygen_build(env,work_queue)
     retval = run_tests(env)
 
     end_time=mbuild.get_time()
-    mbuild.msgb("ELAPSED TIME", mbuild.get_elapsed_time(start_time,
+    mbuild.vmsgb(1, "ELAPSED TIME", mbuild.get_elapsed_time(start_time,
                                                         end_time))
-    mbuild.msgb("RETVAL={}".format(retval))
+    mbuild.vmsgb(1, "RETVAL={}".format(retval))
     return retval
 
 # for compatibility with older user script conventions

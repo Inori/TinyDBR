@@ -1,16 +1,12 @@
 # Intel X86 Encoder Decoder  (Intel XED)
 
+![.github/workflows/ci.yml](https://github.com/intelxed/xed/workflows/.github/workflows/ci.yml/badge.svg)
+
 ## Doxygen API manual and source build manual:
 
 https://intelxed.github.io
 
 ## Bugs:
-
-### Intel internal employee users/developers:
-
-http://mjc.intel.com
-       
-### Everyone else:
 
 https://github.com/intelxed/xed/issues/new
        

@@ -93,7 +93,12 @@ void print_misc(xed_decoded_inst_t* xedd) {
                 // xed_decoded_inst_vector_length_bits is only for VEX/EVEX instr.
                 // This will print 128 vl for FXSAVE and LD/ST MXCSR which is unfortunate.
                 xed_uint_t vl_bits = sse ? 128 : xed_decoded_inst_vector_length_bits(xedd);
-                printf("Vector length: %u \n", vl_bits);
+                printf("Vector length: %u\n", vl_bits);
+            }
+
+            if (xed_classify_avx512(xedd)) {
+                xed_uint_t vec_elements  = xed_decoded_inst_avx512_dest_elements(xedd);
+                printf( "AVX512 vector elements: %u\n", vec_elements);
             }
         }
     }
@@ -126,6 +131,15 @@ void print_misc(xed_decoded_inst_t* xedd) {
         else {
             printf("Could not find cpuid leaf information\n");
         }
+    }
+
+    if (xed3_operand_get_sae(xedd))
+    {
+        static char const* rounding_modes[5] = { "", "rne-sae", "rd-sae", "ru-sae", "rz-sae"};
+        int t = xed3_operand_get_roundc(xedd);
+        printf("suppress-all-exceptions (SAE) set\n");
+        if (t>0 && t<5) 
+            printf("rounding mode override = %s\n", rounding_modes[t]);
     }
 
 }

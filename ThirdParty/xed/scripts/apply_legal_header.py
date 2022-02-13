@@ -1,22 +1,22 @@
 #!/usr/bin/env python 
 # -*- python -*-
-#BEGIN_LEGAL
-#
-#Copyright (c) 2019 Intel Corporation
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
-#  
-#END_LEGAL
+# BEGIN_LEGAL
+# 
+# Copyright (c) 2021 Intel Corporation
+# 
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+# 
+#       http://www.apache.org/licenses/LICENSE-2.0
+# 
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#   
+# END_LEGAL
 from __future__ import print_function
 import sys
 import os
@@ -39,7 +39,7 @@ def remove_existing_header(contents):
     "remove existing legal header, if any"
     retval = []
     skipping = False
-    start_pattern = re.compile(r"^(/[*]BEGIN_LEGAL)|(#BEGIN_LEGAL)")
+    start_pattern = re.compile(r"^(/[*][ ]*BEGIN_LEGAL)|(#[ ]*BEGIN_LEGAL)")
     stop_pattern = re.compile(r"^[ ]*(END_LEGAL[ ]?[*]/)|(#[ ]*END_LEGAL)")
     for line in contents:
         if start_pattern.match(line):
@@ -54,7 +54,7 @@ def prepend_script_comment(header):
     "Apply script comment marker to each line"
     retval = []
     for line in header:
-        retval.append( "#" + line )
+        retval.append( "# " + line )
     return retval
 
 def apply_header_to_source_file(header, file):
@@ -66,7 +66,7 @@ def apply_header_to_source_file(header, file):
     trimmed_contents = remove_existing_header(contents)
     newfile = file + ".new"
     o = open(newfile,"w")
-    o.write("/*BEGIN_LEGAL \n")
+    o.write("/* BEGIN_LEGAL \n")
     o.writelines(header)
     o.write("END_LEGAL */\n")
     o.writelines(trimmed_contents)
@@ -114,9 +114,9 @@ def split_script(lines):
 
 def write_script_header(o,lines):
     "Write the file header for a script"
-    o.write("#BEGIN_LEGAL\n")
+    o.write("# BEGIN_LEGAL\n")
     o.writelines(lines)
-    o.write("#END_LEGAL\n")
+    o.write("# END_LEGAL\n")
     
 def apply_header_to_data_file(header, file):
     "apply header to file using script comment style"

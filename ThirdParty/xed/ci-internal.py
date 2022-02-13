@@ -210,6 +210,10 @@ def main():
     xedext_git = git_base + 'xedext.git'
     cmd = 'git clone {} xedext'.format(xedext_git)
     run(status, cmd, required=True)
+    
+    # check a few lines to make sure we have latest commits
+    cmd = 'git -C xedext log --oneline -5'
+    run(status, cmd, required=True)
 
     branches = get_branches_from_file()
     checkout_branches(status, branches)
@@ -236,6 +240,13 @@ def main():
                                                                               size,
                                                                               link)
                 run(status, cmd)
+
+        # do a build with asserts enabled
+        build_dir = 'obj-assert-{}-{}'.format(pyver, 'x86-64')
+        cmd = '{} mfile.py --asserts --build-dir={} host_cpu={} test'.format(pycmd,
+                                                                             build_dir,
+                                                                             'x86-64')
+        run(status, cmd)
 
         # all instr tests
         all_instr(pyver, pycmd, status, 'internal-conf')

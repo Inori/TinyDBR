@@ -1,6 +1,6 @@
 /*BEGIN_LEGAL 
 
-Copyright (c) 2019 Intel Corporation
+Copyright (c) 2020 Intel Corporation
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -369,6 +369,7 @@ xed_decoded_inst_get_find_memop(const xed_decoded_inst_t* p,
         const xed_operand_t* o = xed_inst_operand(inst,i);
         const xed_operand_enum_t op_name = xed_operand_name(o);
         if ((memop_idx == 0 && op_name == XED_OPERAND_MEM0) ||
+            (memop_idx == 0 && op_name == XED_OPERAND_AGEN) ||
             (memop_idx == 1 && op_name == XED_OPERAND_MEM1))   {
             return i;
         }
@@ -614,10 +615,6 @@ xed_decoded_inst_operand_element_size_bits(
     }
     else if (xed_operand_template_is_register(o)) {
         return xed_decoded_inst_operand_length_bits_register(p, operand_index);
-    }
-    else { 
-        // catch all
-        xed_assert(0);
     }
     return element_size;
 }
@@ -887,6 +884,7 @@ xed_bool_t xed_decoded_inst_masking(const xed_decoded_inst_t* p) {
     return 0;
     (void)p; //pacify compiler
 }
+
 xed_bool_t xed_decoded_inst_merging(const xed_decoded_inst_t* p) {
 #if defined(XED_SUPPORTS_AVX512) || defined(XED_SUPPORTS_KNC)
     if (xed3_operand_get_mask(p) != 0)
@@ -916,6 +914,30 @@ xed_bool_t xed_decoded_inst_zeroing(const xed_decoded_inst_t* p) {
 #endif
     return 0;
     (void)p; //pacify compiler
+}
+
+xed_uint_t xed_decoded_inst_avx512_dest_elements(const xed_decoded_inst_t* p) {
+#if defined(XED_SUPPORTS_AVX512)
+    if (xed_decoded_inst_get_attribute(p, XED_ATTRIBUTE_SIMD_SCALAR))
+        return 1;
+    if (xed_decoded_inst_get_attribute(p, XED_ATTRIBUTE_MASKOP_EVEX)) {
+        const xed_inst_t* xi = xed_decoded_inst_inst(p);
+        const xed_operand_t* op = xed_inst_operand(xi,0); // 0'th operand.
+        if (xed_operand_width(op) == XED_OPERAND_WIDTH_MSKW) {
+            // need to use source vector or memop to find width (VFPCLASS, VCMP{PS,PD}
+            xed_uint_t vl_bits = xed_decoded_inst_vector_length_bits(p);
+            xed_uint_t source_operand_element_bits = xed_decoded_inst_operand_element_size_bits(p,2); // a bit of a hack
+            if (source_operand_element_bits)
+                return vl_bits / source_operand_element_bits;
+            return 0;
+        }
+        xed_uint_t vl_dest_bits = xed_decoded_inst_operand_length_bits(p,0);
+        xed_uint_t dest_element_bits = xed_decoded_inst_operand_element_size_bits(p,0);
+        if (dest_element_bits)
+            return vl_dest_bits / dest_element_bits;
+    }
+#endif
+    return 0;
 }
 
 xed_operand_action_enum_t
