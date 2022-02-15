@@ -41,6 +41,10 @@ uint32_t CmpImm8(xed_state_t *dstate, uint32_t operand_width,
                  xed_reg_enum_t dest_reg, uint64_t imm,
                  unsigned char *encoded, size_t encoded_size);
 
+uint32_t Pushad(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size);
+uint32_t Popad(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size);
+
+
 void CopyOperandFromInstruction(xed_decoded_inst_t *src,
                                 xed_encoder_request_t *dest,
                                 xed_operand_enum_t src_operand_name,
@@ -53,7 +57,5 @@ uint32_t GetInstructionLength(xed_encoder_request_t *inst);
 void FixRipDisplacement(xed_encoder_request_t *inst,
                         size_t mem_address,
                         size_t fixed_instruction_address);
-
-bool IsRspRelative(xed_decoded_inst_t* xedd, size_t* displacement);
 
 #endif  // ARCH_X86_X86_HELPERS_H

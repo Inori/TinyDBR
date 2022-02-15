@@ -58,10 +58,14 @@ class Assembler {
   virtual void Crash(ModuleInfo *module) = 0;
 
   virtual void OffsetStack(ModuleInfo *module, int32_t offset) = 0;
-  virtual bool IsRipRelative(ModuleInfo *module,
-                             Instruction &inst,
-                             size_t instruction_address,
-                             size_t *mem_address) = 0;
+
+  virtual bool IsRipRelative(ModuleInfo*  module,
+							 Instruction& inst,
+							 size_t       instruction_address,
+							 size_t*      mem_address = nullptr)  = 0;
+  virtual bool IsRspRelative(Instruction& inst,
+							 size_t*      displacement = nullptr) = 0;
+
   virtual void TranslateJmp(ModuleInfo *module,
                             ModuleInfo *target_module,
                             size_t original_target,

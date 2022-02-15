@@ -2,6 +2,9 @@
 
 #include "tinydbr.h"
 
+
+
+
 enum MonitorFlag : uint64_t
 {
 	IgnoreCode        = 1 << 0,  // e.g. call [0x1234], jmp [0x1234]
@@ -25,7 +28,7 @@ protected:
 		size_t       instruction_address) override;
 
 private:
-	bool NeedToHandle(const xed_decoded_inst_t* inst);
+	bool NeedToHandle(Instruction& inst);
 
 private:
 	MonitorFlags m_flags = 0;

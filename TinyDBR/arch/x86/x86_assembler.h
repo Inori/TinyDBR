@@ -53,10 +53,12 @@ class X86Assembler : public Assembler {
   void Crash(ModuleInfo *module) override;
 
   void OffsetStack(ModuleInfo *module, int32_t offset) override;
-  bool IsRipRelative(ModuleInfo *module,
-                     Instruction &inst,
-                     size_t instruction_address,
-                     size_t *mem_address) override;
+  bool IsRipRelative(ModuleInfo*  module,
+					 Instruction& inst,
+					 size_t       instruction_address,
+					 size_t*      mem_address = nullptr) override;
+  bool IsRspRelative(Instruction& inst,
+					 size_t*      displacement = nullptr) override;
   void TranslateJmp(ModuleInfo *module,
                          ModuleInfo *target_module,
                          size_t original_target,

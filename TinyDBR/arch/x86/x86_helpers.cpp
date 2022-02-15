@@ -302,6 +302,55 @@ uint32_t CmpImm8(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t des
   return olen;
 }
 
+uint32_t Pushad(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size)
+{
+	uint32_t olen = 0;
+    if (dstate->mmode == XED_MACHINE_MODE_LONG_64)
+    {
+        // push all general registers, except rsp
+		uint8_t pushad[] = { 0x50, 0x53, 0x51, 0x52, 0x55, 0x56, 0x57, 
+            0x41, 0x50, 0x41, 0x51, 0x41, 0x52, 0x41, 0x53, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57 };
+		if (encoded_size < sizeof(pushad))
+		{
+			olen = 0;
+		}
+		else
+		{
+			memcpy(encoded, pushad, sizeof(pushad));
+			olen = sizeof(pushad);
+		}
+    }
+    else
+	{
+		FATAL("Not implemented.");
+	}
+    return olen;
+}
+
+uint32_t Popad(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size)
+{
+	uint32_t olen = 0;
+	if (dstate->mmode == XED_MACHINE_MODE_LONG_64)
+	{
+		uint8_t popad[] = { 0x41, 0x5F, 0x41, 0x5E, 0x41, 0x5D, 0x41, 
+            0x5C, 0x41, 0x5B, 0x41, 0x5A, 0x41, 0x59, 0x41, 0x58, 0x5F, 0x5E, 0x5D, 0x5A, 0x59, 0x5B, 0x58 };
+		if (encoded_size < sizeof(popad))
+		{
+			olen = 0;
+		}
+		else
+		{
+			memcpy(encoded, popad, sizeof(popad));
+			olen = sizeof(popad);
+		}
+	}
+	else
+	{
+		FATAL("Not implemented.");
+	}
+	return olen;
+}
+
 uint32_t GetInstructionLength(xed_encoder_request_t *inst) {
   unsigned int olen;
   unsigned char tmp[15];
@@ -326,34 +375,4 @@ void FixRipDisplacement(xed_encoder_request_t *inst, size_t mem_address, size_t 
   if (llabs(fixed_disp) > 0x7FFFFFFF) FATAL("Offset larger than 2G");
   
   xed_encoder_request_set_memory_displacement(inst, fixed_disp, 4);
-}
-
-// checks if the instruction uses RSP-relative addressing,
-// e.g. mov rax, [rsp+displacement];
-// and, if so, returns the displacement
-bool IsRspRelative(xed_decoded_inst_t *xedd, size_t* displacement) {
-  bool rsp_relative = false;
-  int64_t disp;
-
-  uint32_t memops = xed_decoded_inst_number_of_memory_operands(xedd);
-
-  for (uint32_t i = 0; i < memops; i++) {
-    xed_reg_enum_t base = xed_decoded_inst_get_base_reg(xedd, i);
-    switch (base) {
-    case XED_REG_RSP:
-    case XED_REG_ESP:
-    case XED_REG_SP:
-      rsp_relative = true;
-      disp = xed_decoded_inst_get_memory_displacement(xedd, i);
-      break;
-    default:
-      break;
-    }
-  }
-
-  if (!rsp_relative) return false;
-
-  *displacement = (size_t)(disp);
-
-  return rsp_relative;
 }

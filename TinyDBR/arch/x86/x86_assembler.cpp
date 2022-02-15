@@ -183,10 +183,51 @@ bool X86Assembler::IsRipRelative(ModuleInfo *module,
 
   if (!rip_relative) return false;
 
-  size_t instruction_size = xed_decoded_inst_get_length(&inst.xedd);
-  *mem_address = (size_t)(instruction_address + instruction_size + disp);
+  if (mem_address)
+  {
+	  size_t instruction_size = xed_decoded_inst_get_length(&inst.xedd);
+	  *mem_address            = (size_t)(instruction_address + instruction_size + disp);
+  }
 
   return rip_relative;
+}
+
+// checks if the instruction uses RSP-relative addressing,
+// e.g. mov rax, [rsp+displacement];
+// and, if so, returns the displacement
+bool X86Assembler::IsRspRelative(Instruction& inst,
+								 size_t*      displacement)
+{
+	bool    rsp_relative = false;
+	int64_t disp;
+
+	uint32_t memops = xed_decoded_inst_number_of_memory_operands(&inst.xedd);
+
+	for (uint32_t i = 0; i < memops; i++)
+	{
+		xed_reg_enum_t base = xed_decoded_inst_get_base_reg(&inst.xedd, i);
+		switch (base)
+		{
+		case XED_REG_RSP:
+		case XED_REG_ESP:
+		case XED_REG_SP:
+			rsp_relative = true;
+			disp         = xed_decoded_inst_get_memory_displacement(&inst.xedd, i);
+			break;
+		default:
+			break;
+		}
+	}
+
+	if (!rsp_relative)
+		return false;
+
+    if (displacement)
+	{
+		*displacement = (size_t)(disp);
+	}
+	
+	return rsp_relative;
 }
 
 // adds/subtracts a given offset to the stack pointer
