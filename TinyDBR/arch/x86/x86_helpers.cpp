@@ -302,7 +302,7 @@ uint32_t CmpImm8(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t des
   return olen;
 }
 
-uint32_t Pushad(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size)
+uint32_t Pushaq(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size)
 {
 	uint32_t olen = 0;
     if (dstate->mmode == XED_MACHINE_MODE_LONG_64)
@@ -327,7 +327,7 @@ uint32_t Pushad(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size
     return olen;
 }
 
-uint32_t Popad(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size)
+uint32_t Popaq(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size)
 {
 	uint32_t olen = 0;
 	if (dstate->mmode == XED_MACHINE_MODE_LONG_64)

@@ -41,8 +41,8 @@ uint32_t CmpImm8(xed_state_t *dstate, uint32_t operand_width,
                  xed_reg_enum_t dest_reg, uint64_t imm,
                  unsigned char *encoded, size_t encoded_size);
 
-uint32_t Pushad(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size);
-uint32_t Popad(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size);
+uint32_t Pushaq(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size);
+uint32_t Popaq(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size);
 
 
 void CopyOperandFromInstruction(xed_decoded_inst_t *src,
