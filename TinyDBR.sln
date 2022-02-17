@@ -13,6 +13,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ShellcodeSample", "Shellcod
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Translator", "Translator\Translator.vcxproj", "{282E10E2-9C33-401E-8254-90D6127E1EA6}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Zycore", "ThirdParty\zydis\msvc\dependencies\zycore\Zycore.vcxproj", "{E06E2E87-82B9-4DC2-A1E9-FE371CDBAAC2}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Zydis", "ThirdParty\zydis\msvc\zydis\Zydis.vcxproj", "{88A23124-5640-35A0-B890-311D7A67A7D2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -53,12 +57,30 @@ Global
 		{282E10E2-9C33-401E-8254-90D6127E1EA6}.Release|x64.Build.0 = Release|x64
 		{282E10E2-9C33-401E-8254-90D6127E1EA6}.Release|x86.ActiveCfg = Release|Win32
 		{282E10E2-9C33-401E-8254-90D6127E1EA6}.Release|x86.Build.0 = Release|Win32
+		{E06E2E87-82B9-4DC2-A1E9-FE371CDBAAC2}.Debug|x64.ActiveCfg = Debug|x64
+		{E06E2E87-82B9-4DC2-A1E9-FE371CDBAAC2}.Debug|x64.Build.0 = Debug|x64
+		{E06E2E87-82B9-4DC2-A1E9-FE371CDBAAC2}.Debug|x86.ActiveCfg = Debug|Win32
+		{E06E2E87-82B9-4DC2-A1E9-FE371CDBAAC2}.Debug|x86.Build.0 = Debug|Win32
+		{E06E2E87-82B9-4DC2-A1E9-FE371CDBAAC2}.Release|x64.ActiveCfg = Release|x64
+		{E06E2E87-82B9-4DC2-A1E9-FE371CDBAAC2}.Release|x64.Build.0 = Release|x64
+		{E06E2E87-82B9-4DC2-A1E9-FE371CDBAAC2}.Release|x86.ActiveCfg = Release|Win32
+		{E06E2E87-82B9-4DC2-A1E9-FE371CDBAAC2}.Release|x86.Build.0 = Release|Win32
+		{88A23124-5640-35A0-B890-311D7A67A7D2}.Debug|x64.ActiveCfg = Debug|x64
+		{88A23124-5640-35A0-B890-311D7A67A7D2}.Debug|x64.Build.0 = Debug|x64
+		{88A23124-5640-35A0-B890-311D7A67A7D2}.Debug|x86.ActiveCfg = Debug|Win32
+		{88A23124-5640-35A0-B890-311D7A67A7D2}.Debug|x86.Build.0 = Debug|Win32
+		{88A23124-5640-35A0-B890-311D7A67A7D2}.Release|x64.ActiveCfg = Release|x64
+		{88A23124-5640-35A0-B890-311D7A67A7D2}.Release|x64.Build.0 = Release|x64
+		{88A23124-5640-35A0-B890-311D7A67A7D2}.Release|x86.ActiveCfg = Release|Win32
+		{88A23124-5640-35A0-B890-311D7A67A7D2}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{C4C61141-194F-4B7A-ABBC-B80D257C0644} = {E0F5F7A3-7655-4AD8-A252-CB49B646E7F4}
+		{E06E2E87-82B9-4DC2-A1E9-FE371CDBAAC2} = {E0F5F7A3-7655-4AD8-A252-CB49B646E7F4}
+		{88A23124-5640-35A0-B890-311D7A67A7D2} = {E0F5F7A3-7655-4AD8-A252-CB49B646E7F4}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {F3F0C001-05F8-45CB-B495-931311907306}
