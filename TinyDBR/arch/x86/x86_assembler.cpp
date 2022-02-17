@@ -158,38 +158,26 @@ void X86Assembler::JmpAddress(ModuleInfo *module, size_t address) {
 // checks if the instruction uses RIP-relative addressing,
 // e.g. mov rax, [rip+displacement]; call [rip+displacement]
 // and, if so, returns the memory address being referenced
-bool X86Assembler::IsRipRelative(ModuleInfo *module,
-                                 Instruction& inst,
-                                 size_t instruction_address,
-                                 size_t *mem_address) {
-  bool rip_relative = false;
-  int64_t disp;
+bool X86Assembler::IsRipRelative(ModuleInfo*  module,
+								 Instruction& inst,
+								 size_t       instruction_address,
+								 size_t*      mem_address)
+{
+	const auto& zinst        = inst.zinst;
+	bool        rip_relative = zinst.instruction.attributes & ZYDIS_ATTRIB_IS_RELATIVE;
 
-  uint32_t memops = xed_decoded_inst_number_of_memory_operands(&inst.xedd);
+	if (!rip_relative)
+		return false;
 
-  for (uint32_t i = 0; i < memops; i++) {
-    xed_reg_enum_t base = xed_decoded_inst_get_base_reg(&inst.xedd, i);
-    switch (base) {
-      case XED_REG_RIP:
-      case XED_REG_EIP:
-      case XED_REG_IP:
-        rip_relative = true;
-        disp = xed_decoded_inst_get_memory_displacement(&inst.xedd, i);
-        break;
-      default:
-        break;
-    }
-  }
+	int64_t disp = zinst.instruction.raw.disp.value;
 
-  if (!rip_relative) return false;
+	if (mem_address)
+	{
+		size_t instruction_size = zinst.instruction.length;
+		*mem_address            = (size_t)(instruction_address + instruction_size + disp);
+	}
 
-  if (mem_address)
-  {
-	  size_t instruction_size = xed_decoded_inst_get_length(&inst.xedd);
-	  *mem_address            = (size_t)(instruction_address + instruction_size + disp);
-  }
-
-  return rip_relative;
+	return rip_relative;
 }
 
 // checks if the instruction uses RSP-relative addressing,
@@ -201,31 +189,32 @@ bool X86Assembler::IsRspRelative(Instruction& inst,
 	bool    rsp_relative = false;
 	int64_t disp;
 
-	uint32_t memops = xed_decoded_inst_number_of_memory_operands(&inst.xedd);
+    const auto& zinst = inst.zinst;
+	for (ZyanU8 i = 0; i != zinst.instruction.operand_count; ++i)
+    {
+		const auto& operand = zinst.operands[i];
+		if (operand.visibility != ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
+        {
+            continue;
+        }
 
-	for (uint32_t i = 0; i < memops; i++)
-	{
-		xed_reg_enum_t base = xed_decoded_inst_get_base_reg(&inst.xedd, i);
-		switch (base)
-		{
-		case XED_REG_RSP:
-		case XED_REG_ESP:
-		case XED_REG_SP:
+		if (operand.type != ZYDIS_OPERAND_TYPE_MEMORY)
+        {
+            continue;
+        }
+
+        if (operand.mem.base == ZYDIS_REGISTER_SP ||
+			operand.mem.base == ZYDIS_REGISTER_ESP||
+			operand.mem.base == ZYDIS_REGISTER_RSP)
+        {
 			rsp_relative = true;
-			disp         = xed_decoded_inst_get_memory_displacement(&inst.xedd, i);
-			break;
-		default:
-			break;
-		}
-	}
-
-	if (!rsp_relative)
-		return false;
-
-    if (displacement)
-	{
-		*displacement = (size_t)(disp);
-	}
+			if (displacement && operand.mem.disp.has_displacement)
+            {
+				*displacement = operand.mem.disp.value;
+            }
+            break;
+        }
+    }
 	
 	return rsp_relative;
 }
@@ -338,7 +327,8 @@ void X86Assembler::InstrumentRet(ModuleInfo *module,
   // saved EFLAGS
   // <sp_offset>
   // and RAX must contain return address
-
+    
+  const auto& zinst = inst.zinst;
   // store rax to a safe offset
   int32_t ax_offset = -tinyinst_.sp_offset - 2 * tinyinst_.child_ptr_size;
   WriteStack(module, ax_offset);
@@ -347,7 +337,7 @@ void X86Assembler::InstrumentRet(ModuleInfo *module,
   ReadStack(module, 0);
   WriteStack(module, ret_offset);
   // get ret immediate
-  int32_t imm = (int32_t)xed_decoded_inst_get_unsigned_immediate(&inst.xedd);
+  int32_t imm = zinst.instruction.raw.imm[0].value.u;
   // align the stack
   int32_t ret_pop =
       (int32_t)tinyinst_.child_ptr_size + imm - tinyinst_.sp_offset;
@@ -373,106 +363,118 @@ void X86Assembler::InstrumentRet(ModuleInfo *module,
 // converts an indirect jump/call into a MOV instruction
 // which moves the target of the indirect call into the RAX/EAX register
 // and writes this instruction into the code buffer
-void X86Assembler::MovIndirectTarget(ModuleInfo *module,
-                                     Instruction &inst,
-                                     size_t original_address,
-                                     int32_t stack_offset) {
-  size_t mem_address = 0;
-  bool rip_relative =
-      IsRipRelative(module, inst, original_address, &mem_address);
+void X86Assembler::MovIndirectTarget(ModuleInfo*  module,
+									 Instruction& inst,
+									 size_t       original_address,
+									 int32_t      stack_offset)
+{
+	size_t mem_address = 0;
+	bool   rip_relative =
+		IsRipRelative(module, inst, original_address, &mem_address);
 
-  xed_error_enum_t xed_error;
-  uint32_t olen;
+	ZydisRegister dest_reg;
+	if (tinyinst_.child_ptr_size == 4)
+	{
+		dest_reg = ZYDIS_REGISTER_EAX;
+	}
+	else
+	{
+		dest_reg = ZYDIS_REGISTER_RAX;
+	}
 
-  const xed_inst_t *xi = xed_decoded_inst_inst(&inst.xedd);
-  const xed_operand_t *op = xed_inst_operand(xi, 0);
-  xed_operand_enum_t operand_name = xed_operand_name(op);
+	ZydisEncoderRequest mov;
+	memset(&mov, 0, sizeof(mov));
+	mov.mnemonic = ZYDIS_MNEMONIC_MOV;
 
-  xed_state_t dstate;
-  dstate.mmode = (xed_machine_mode_enum_t)tinyinst_.child_ptr_size == 8
-                     ? XED_MACHINE_MODE_LONG_64
-                     : XED_MACHINE_MODE_LEGACY_32;
-  dstate.stack_addr_width = (xed_address_width_enum_t)tinyinst_.child_ptr_size;
+	mov.machine_mode      = tinyinst_.child_ptr_size == 8
+								? ZYDIS_MACHINE_MODE_LONG_64
+								: ZYDIS_MACHINE_MODE_LEGACY_32;
+	mov.address_size_hint = tinyinst_.child_ptr_size == 8
+								? ZYDIS_ADDRESS_SIZE_HINT_64
+								: ZYDIS_ADDRESS_SIZE_HINT_32;
+	mov.operand_size_hint = tinyinst_.child_ptr_size == 8
+								? ZYDIS_OPERAND_SIZE_HINT_64
+								: ZYDIS_OPERAND_SIZE_HINT_32;
 
-  xed_reg_enum_t dest_reg;
-  if (tinyinst_.child_ptr_size == 4) {
-    dest_reg = XED_REG_EAX;
-  } else {
-    dest_reg = XED_REG_RAX;
-  }
+	mov.operand_count         = 2;
+	mov.operands[0].type      = ZYDIS_OPERAND_TYPE_REGISTER;
+	mov.operands[0].reg.value = dest_reg;
 
-  xed_encoder_request_t mov;
-  xed_encoder_request_zero_set_mode(&mov, &dstate);
-  xed_encoder_request_set_iclass(&mov, XED_ICLASS_MOV);
+	const auto& zinst   = inst.zinst;
+	const auto& operand = inst.zinst.operands[0];
 
-  xed_encoder_request_set_effective_operand_width(
-      &mov, (uint32_t)(tinyinst_.child_ptr_size * 8));
-  xed_encoder_request_set_effective_address_size(
-      &mov, (uint32_t)(tinyinst_.child_ptr_size * 8));
+	if (operand.type == ZYDIS_OPERAND_TYPE_MEMORY)
+	{
+		// TODO:
+		// need segment register?
+		mov.operands[1].type      = ZYDIS_OPERAND_TYPE_MEMORY;
+		mov.operands[1].mem.base  = operand.mem.base;
+		mov.operands[1].mem.index = operand.mem.index;
+		mov.operands[1].mem.scale = operand.mem.scale;
+		mov.operands[1].mem.size  = operand.size / 8;
 
-  xed_encoder_request_set_reg(&mov, XED_OPERAND_REG0, dest_reg);
-  xed_encoder_request_set_operand_order(&mov, 0, XED_OPERAND_REG0);
+		// in an unlikely case where base is rsp, disp needs fixing
+		// this is because we pushed stuff on the stack
+		const auto& base = operand.mem.base;
+		if ((base == ZYDIS_REGISTER_SP) ||
+			(base == ZYDIS_REGISTER_ESP) ||
+			(base == ZYDIS_REGISTER_RSP))
+		{
+			// printf("base = sp\n");
+			int64_t disp = operand.mem.disp.value + stack_offset;
 
-  if (operand_name == XED_OPERAND_MEM0) {
-    xed_encoder_request_set_mem0(&mov);
-    xed_reg_enum_t base_reg = xed_decoded_inst_get_base_reg(&inst.xedd, 0);
-    xed_encoder_request_set_base0(&mov, base_reg);
-    xed_encoder_request_set_seg0(&mov, xed_decoded_inst_get_seg_reg(&inst.xedd, 0));
-    xed_encoder_request_set_index(&mov,
-                                  xed_decoded_inst_get_index_reg(&inst.xedd, 0));
-    xed_encoder_request_set_scale(&mov, xed_decoded_inst_get_scale(&inst.xedd, 0));
-    // in an unlikely case where base is rsp, disp needs fixing
-    // this is because we pushed stuff on the stack
-    if ((base_reg == XED_REG_SP) || (base_reg == XED_REG_ESP) ||
-        (base_reg == XED_REG_RSP)) {
-      // printf("base = sp\n");
-      int64_t disp =
-          xed_decoded_inst_get_memory_displacement(&inst.xedd, 0) + stack_offset;
-      // always use disp width 4 in this case
-      xed_encoder_request_set_memory_displacement(&mov, disp, 4);
-    } else {
-      xed_encoder_request_set_memory_displacement(
-          &mov, xed_decoded_inst_get_memory_displacement(&inst.xedd, 0),
-          xed_decoded_inst_get_memory_displacement_width(&inst.xedd, 0));
-    }
-    xed_encoder_request_set_memory_operand_length(
-        &mov, xed_decoded_inst_get_memory_operand_length(&inst.xedd, 0));
-    xed_encoder_request_set_operand_order(&mov, 1, XED_OPERAND_MEM0);
-  } else if (operand_name == XED_OPERAND_REG0) {
-    xed_encoder_request_set_reg(
-        &mov,
-        XED_OPERAND_REG1,
-        xed_decoded_inst_get_reg(&inst.xedd, XED_OPERAND_REG0));
-    xed_encoder_request_set_operand_order(&mov, 1, XED_OPERAND_REG1);
-  } else {
-    FATAL("Unexpected operand in indirect jump/call");
-  }
+			// always use disp width 4 in this case
+			// TODO:
+			// it seems zydis can't custom displament width.
+			WARN("call [rsp+disp], not support 4 bytes displament.");
+			mov.operands[1].mem.displacement = disp;
+		}
+		else
+		{
+			mov.operands[1].mem.displacement = operand.mem.disp.value;
+		}
+	}
+	else if (operand.type == ZYDIS_OPERAND_TYPE_REGISTER)
+	{
+		mov.operands[1].type      = ZYDIS_OPERAND_TYPE_REGISTER;
+		mov.operands[0].reg.value = operand.reg.value;
+	}
+	else
+	{
+		FATAL("Unexpected operand in indirect jump/call");
+	}
 
-  unsigned char encoded[15];
-  xed_error = xed_encode(&mov, encoded, sizeof(encoded), &olen);
-  if (xed_error != XED_ERROR_NONE) {
-    FATAL("Error encoding instruction");
-  }
+	ZyanU8     encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH] = { 0 };
+	ZyanUSize  encoded_length                                    = sizeof(encoded_instruction);
+	ZyanStatus zstatus = ZydisEncoderEncodeInstruction(&mov, encoded_instruction, &encoded_length);
+	if (ZYAN_FAILED(zstatus))
+	{
+		FATAL("Error encoding instruction");
+	}
 
-  if (rip_relative) {
-    // fix displacement
-    size_t out_instruction_size = olen;
-    int64_t fixed_disp =
-        (int64_t)mem_address -
-        (int64_t)((size_t)module->instrumented_code_remote +
-                  module->instrumented_code_allocated +
-                  out_instruction_size);
-    xed_encoder_request_set_memory_displacement(&mov, fixed_disp, 4);
-    xed_error = xed_encode(&mov, encoded, sizeof(encoded), &olen);
-    if (xed_error != XED_ERROR_NONE) {
-      FATAL("Error encoding instruction");
-    }
-    if (olen != out_instruction_size) {
-      FATAL("Unexpected instruction size");
-    }
-  }
+	if (rip_relative)
+	{
+		// fix displacement
+		size_t  out_instruction_size = encoded_length;
+		int64_t fixed_disp =
+			(int64_t)mem_address -
+			(int64_t)((size_t)module->instrumented_code_remote +
+					  module->instrumented_code_allocated +
+					  out_instruction_size);
+		mov.operands[1].mem.displacement = fixed_disp;
+		zstatus = ZydisEncoderEncodeInstruction(&mov, encoded_instruction, &encoded_length);
+		if (ZYAN_FAILED(zstatus))
+		{
+			FATAL("Error encoding instruction");
+		}
 
-  tinyinst_.WriteCode(module, encoded, olen);
+		if (encoded_length != out_instruction_size)
+		{
+			FATAL("Unexpected instruction size");
+		}
+	}
+
+	tinyinst_.WriteCode(module, encoded_instruction, encoded_length);
 }
 
 // translates indirect jump or call

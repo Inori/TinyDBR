@@ -72,22 +72,22 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(ProjectDir);$(SolutionDir)ThirdParty\zydis\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir);$(SolutionDir)ThirdParty\zydis\dependencies\zycore\include;$(SolutionDir)ThirdParty\zydis\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)ThirdParty\zydis\msvc\bin\$(Configuration)$(Platform);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(ProjectDir);$(SolutionDir)ThirdParty\zydis\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir);$(SolutionDir)ThirdParty\zydis\dependencies\zycore\include;$(SolutionDir)ThirdParty\zydis\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)ThirdParty\zydis\msvc\bin\$(Configuration)$(Platform);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(ProjectDir);$(SolutionDir)ThirdParty\zydis\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir);$(SolutionDir)ThirdParty\zydis\dependencies\zycore\include;$(SolutionDir)ThirdParty\zydis\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)ThirdParty\zydis\msvc\bin\$(Configuration)$(Platform);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(ProjectDir);$(SolutionDir)ThirdParty\zydis\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir);$(SolutionDir)ThirdParty\zydis\dependencies\zycore\include;$(SolutionDir)ThirdParty\zydis\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)ThirdParty\zydis\msvc\bin\$(Configuration)$(Platform);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">

@@ -20,10 +20,14 @@ limitations under the License.
 #ifdef ARM64
 #include "third_party/reil/reil/aarch64/decoder.h"
 #else
-extern "C" {
-  #include "xed/xed-interface.h"
-}
-typedef struct xed_decoded_inst_s xed_decoded_inst_t;
+#include <Zydis/Zydis.h>
+
+struct ZydisInstruction
+{
+	ZydisDecodedInstruction instruction;
+	ZydisDecodedOperand     operands[ZYDIS_MAX_OPERAND_COUNT];
+};
+
 #endif
 
 enum InstructionClass {
@@ -34,28 +38,30 @@ enum InstructionClass {
   OTHER,
 };
 
-struct Instruction {
-  size_t address;
-  size_t length;
-  bool bbend;
-  InstructionClass iclass;
+struct Instruction
+{
+	size_t           address;
+	size_t           length;
+	bool             bbend;
+	InstructionClass iclass;
 
 #ifdef ARM64
-  reil::aarch64::decoder::Instruction instr;
+	reil::aarch64::decoder::Instruction instr;
 #else
-  xed_decoded_inst_t xedd;
+	ZydisInstruction zinst;
 #endif
-  Instruction()
-      : address(0),
-        length(0),
-        bbend(false),
-        iclass(InstructionClass::INVALID),
+	Instruction() :
+		address(0),
+		length(0),
+		bbend(false),
+		iclass(InstructionClass::INVALID),
 #ifdef ARM64
-        instr({})
+		instr({})
 #else
-        xedd({})
+		zinst({})
 #endif
-  {}
+	{
+	}
 };
 
 #endif  // INSTRUCTION_H

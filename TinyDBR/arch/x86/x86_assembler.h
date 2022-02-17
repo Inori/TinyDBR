@@ -17,9 +17,7 @@ limitations under the License.
 #ifndef ARCH_X86_X86_ASSEMBLER_H
 #define ARCH_X86_X86_ASSEMBLER_H
 
-extern "C" {
-#include "xed/xed-interface.h"
-}
+#include <Zydis/Zydis.h>
 
 #include "..\..\assembler.h"
 #include "..\..\tinydbr.h"
