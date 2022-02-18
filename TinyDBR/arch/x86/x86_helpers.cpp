@@ -16,120 +16,185 @@ limitations under the License.
 
 #include "../../common.h"
 #include "x86_helpers.h"
+#if 0
 
-xed_reg_enum_t GetUnusedRegister(xed_reg_enum_t used_register, int operand_width) {
-  switch (operand_width) {
-  case 16:
-    if (used_register == XED_REG_AX) return XED_REG_CX;
-    return XED_REG_AX;
-  case 32:
-    if (used_register == XED_REG_EAX) return XED_REG_ECX;
-    return XED_REG_EAX;
-  case 64:
-    if (used_register == XED_REG_RAX) return XED_REG_RCX;
-    return XED_REG_RAX;
-  default:
-    FATAL("Unexpected operand width");
-  }
+ZydisRegister GetUnusedRegister(ZydisRegister used_register, int operand_width)
+{
+	switch (operand_width)
+	{
+	case 16:
+		if (used_register == ZYDIS_REGISTER_AX) return ZYDIS_REGISTER_CX;
+		return ZYDIS_REGISTER_AX;
+	case 32:
+		if (used_register == ZYDIS_REGISTER_EAX) return ZYDIS_REGISTER_ECX;
+		return ZYDIS_REGISTER_EAX;
+	case 64:
+		if (used_register == ZYDIS_REGISTER_RAX) return ZYDIS_REGISTER_RCX;
+		return ZYDIS_REGISTER_RAX;
+	default:
+		FATAL("Unexpected operand width");
+	}
 }
 
-xed_reg_enum_t GetFullSizeRegister(xed_reg_enum_t r, int child_ptr_size) {
-  if (child_ptr_size == 8) {
-    return xed_get_largest_enclosing_register(r);
-  } else {
-    return xed_get_largest_enclosing_register32(r);
-  }
+ZyanU32 GetRegisterWidth(ZydisRegister reg)
+{
+	ZyanU32 width = 0;
+	ZyanU32 reg_val = static_cast<ZyanU32>(reg);
+
+	if (reg_val >= ZYDIS_REGISTER_AL && reg_val <= ZYDIS_REGISTER_R15B)
+	{
+		width = 8;
+	}
+	else if (reg_val >= ZYDIS_REGISTER_AX && reg_val <= ZYDIS_REGISTER_R15W)
+	{
+		width = 16;
+	}
+	else if (reg_val >= ZYDIS_REGISTER_EAX && reg_val <= ZYDIS_REGISTER_R15D)
+	{
+		width = 32;
+	}
+	else if (reg_val >= ZYDIS_REGISTER_RAX && reg_val <= ZYDIS_REGISTER_R15)
+	{
+		width = 64;
+	}
+	else
+	{
+		FATAL("Not a general register.");
+	}
+
+	return width;
 }
 
-xed_reg_enum_t Get8BitRegister(xed_reg_enum_t r) {
-  switch (r) {
-  case XED_REG_AX:
-  case XED_REG_EAX:
-  case XED_REG_RAX:
-    return XED_REG_AL;
+ZydisRegister GetFullSizeRegister(ZydisRegister reg, int child_ptr_size)
+{
+	ZydisRegister new_reg = ZYDIS_REGISTER_NONE;
+	ZyanU32       width  = GetRegisterWidth(reg);
+	
+	if (reg == ZYDIS_REGISTER_NONE)
+	{
+		width = 0;
+	}
 
-  case XED_REG_CX:
-  case XED_REG_ECX:
-  case XED_REG_RCX:
-    return XED_REG_CL;
+	switch (width)
+	{
+	case 32:
+		new_reg = reg;
+		break;
+	case 16:
+		new_reg = (ZydisRegister)((int)reg + 16);
+		break;
+	case 8:
+	{
+		if (reg >= ZYDIS_REGISTER_AL && reg <= ZYDIS_REGISTER_BL)
+		{
+			reg = (ZydisRegister)((int)reg + 4);
+		}
+		new_reg = (ZydisRegister)((int)reg + 32);
+	}
+	break;
+	default: // for 0 or 64
+		new_reg = reg;
+		break;
+	}
 
-  case XED_REG_DX:
-  case XED_REG_EDX:
-  case XED_REG_RDX:
-    return XED_REG_DL;
+	if (child_ptr_size == 8 && width != 64 && width != 0)
+	{
+		new_reg = (ZydisRegister)((int)new_reg + 16);
+	}
+	return new_reg;
+}
 
-  case XED_REG_BX:
-  case XED_REG_EBX:
-  case XED_REG_RBX:
-    return XED_REG_BL;
+ZydisRegister Get8BitRegister(ZydisRegister reg)
+{
+	switch (reg)
+	{
+	case ZYDIS_REGISTER_AX:
+	case ZYDIS_REGISTER_EAX:
+	case ZYDIS_REGISTER_RAX:
+		return ZYDIS_REGISTER_AL;
 
-  case XED_REG_SP:
-  case XED_REG_ESP:
-  case XED_REG_RSP:
-    return XED_REG_SPL;
+	case ZYDIS_REGISTER_CX:
+	case ZYDIS_REGISTER_ECX:
+	case ZYDIS_REGISTER_RCX:
+		return ZYDIS_REGISTER_CL;
 
-  case XED_REG_BP:
-  case XED_REG_EBP:
-  case XED_REG_RBP:
-    return XED_REG_BPL;
+	case ZYDIS_REGISTER_DX:
+	case ZYDIS_REGISTER_EDX:
+	case ZYDIS_REGISTER_RDX:
+		return ZYDIS_REGISTER_DL;
 
-  case XED_REG_SI:
-  case XED_REG_ESI:
-  case XED_REG_RSI:
-    return XED_REG_SIL;
+	case ZYDIS_REGISTER_BX:
+	case ZYDIS_REGISTER_EBX:
+	case ZYDIS_REGISTER_RBX:
+		return ZYDIS_REGISTER_BL;
 
-  case XED_REG_DI:
-  case XED_REG_EDI:
-  case XED_REG_RDI:
-    return XED_REG_DIL;
+	case ZYDIS_REGISTER_SP:
+	case ZYDIS_REGISTER_ESP:
+	case ZYDIS_REGISTER_RSP:
+		return ZYDIS_REGISTER_SPL;
 
-  case XED_REG_R8W:
-  case XED_REG_R8D:
-  case XED_REG_R8:
-    return XED_REG_R8B;
+	case ZYDIS_REGISTER_BP:
+	case ZYDIS_REGISTER_EBP:
+	case ZYDIS_REGISTER_RBP:
+		return ZYDIS_REGISTER_BPL;
 
-  case XED_REG_R9W:
-  case XED_REG_R9D:
-  case XED_REG_R9:
-    return XED_REG_R9B;
+	case ZYDIS_REGISTER_SI:
+	case ZYDIS_REGISTER_ESI:
+	case ZYDIS_REGISTER_RSI:
+		return ZYDIS_REGISTER_SIL;
 
-  case XED_REG_R10W:
-  case XED_REG_R10D:
-  case XED_REG_R10:
-    return XED_REG_R10B;
+	case ZYDIS_REGISTER_DI:
+	case ZYDIS_REGISTER_EDI:
+	case ZYDIS_REGISTER_RDI:
+		return ZYDIS_REGISTER_DIL;
 
-  case XED_REG_R11W:
-  case XED_REG_R11D:
-  case XED_REG_R11:
-    return XED_REG_R11B;
+	case ZYDIS_REGISTER_R8W:
+	case ZYDIS_REGISTER_R8D:
+	case ZYDIS_REGISTER_R8:
+		return ZYDIS_REGISTER_R8B;
 
-  case XED_REG_R12W:
-  case XED_REG_R12D:
-  case XED_REG_R12:
-    return XED_REG_R12B;
+	case ZYDIS_REGISTER_R9W:
+	case ZYDIS_REGISTER_R9D:
+	case ZYDIS_REGISTER_R9:
+		return ZYDIS_REGISTER_R9B;
 
-  case XED_REG_R13W:
-  case XED_REG_R13D:
-  case XED_REG_R13:
-    return XED_REG_R13B;
+	case ZYDIS_REGISTER_R10W:
+	case ZYDIS_REGISTER_R10D:
+	case ZYDIS_REGISTER_R10:
+		return ZYDIS_REGISTER_R10B;
 
-  case XED_REG_R14W:
-  case XED_REG_R14D:
-  case XED_REG_R14:
-    return XED_REG_R14B;
+	case ZYDIS_REGISTER_R11W:
+	case ZYDIS_REGISTER_R11D:
+	case ZYDIS_REGISTER_R11:
+		return ZYDIS_REGISTER_R11B;
 
-  case XED_REG_R15W:
-  case XED_REG_R15D:
-  case XED_REG_R15:
-    return XED_REG_R15B;
+	case ZYDIS_REGISTER_R12W:
+	case ZYDIS_REGISTER_R12D:
+	case ZYDIS_REGISTER_R12:
+		return ZYDIS_REGISTER_R12B;
 
-  default:
-    FATAL("Unknown register");
-  }
+	case ZYDIS_REGISTER_R13W:
+	case ZYDIS_REGISTER_R13D:
+	case ZYDIS_REGISTER_R13:
+		return ZYDIS_REGISTER_R13B;
+
+	case ZYDIS_REGISTER_R14W:
+	case ZYDIS_REGISTER_R14D:
+	case ZYDIS_REGISTER_R14:
+		return ZYDIS_REGISTER_R14B;
+
+	case ZYDIS_REGISTER_R15W:
+	case ZYDIS_REGISTER_R15D:
+	case ZYDIS_REGISTER_R15:
+		return ZYDIS_REGISTER_R15B;
+
+	default:
+		FATAL("Unknown register");
+	}
 }
 
 
-uint32_t Push(xed_state_t *dstate, xed_reg_enum_t r, unsigned char *encoded, size_t encoded_size) {
+uint32_t Push(xed_state_t *dstate, ZYDIS_REGISTER_enum_t r, unsigned char *encoded, size_t encoded_size) {
   uint32_t olen;
   xed_error_enum_t xed_error;
 
@@ -152,7 +217,7 @@ uint32_t Push(xed_state_t *dstate, xed_reg_enum_t r, unsigned char *encoded, siz
   return olen;
 }
 
-uint32_t Pop(xed_state_t *dstate, xed_reg_enum_t r, unsigned char *encoded, size_t encoded_size) {
+uint32_t Pop(xed_state_t *dstate, ZYDIS_REGISTER_enum_t r, unsigned char *encoded, size_t encoded_size) {
   uint32_t olen;
   xed_error_enum_t xed_error;
 
@@ -186,17 +251,17 @@ void CopyOperandFromInstruction(xed_decoded_inst_t *src,
   if ((src_operand_name >= XED_OPERAND_REG0) && (src_operand_name <= XED_OPERAND_REG8) &&
       (dest_operand_name >= XED_OPERAND_REG0) && (dest_operand_name <= XED_OPERAND_REG8))
   {
-    xed_reg_enum_t r = xed_decoded_inst_get_reg(src, src_operand_name);
+    ZYDIS_REGISTER_enum_t r = xed_decoded_inst_get_reg(src, src_operand_name);
     xed_encoder_request_set_reg(dest, dest_operand_name, r);
   } else if (src_operand_name == XED_OPERAND_MEM0 && dest_operand_name == XED_OPERAND_MEM0) {
     xed_encoder_request_set_mem0(dest);
-    xed_reg_enum_t base_reg = xed_decoded_inst_get_base_reg(src, 0);
+    ZYDIS_REGISTER_enum_t base_reg = xed_decoded_inst_get_base_reg(src, 0);
     xed_encoder_request_set_base0(dest, base_reg);
     xed_encoder_request_set_seg0(dest, xed_decoded_inst_get_seg_reg(src, 0));
     xed_encoder_request_set_index(dest, xed_decoded_inst_get_index_reg(src, 0));
     xed_encoder_request_set_scale(dest, xed_decoded_inst_get_scale(src, 0));
     // in case where base is rsp, disp needs fixing
-    if ((base_reg == XED_REG_SP) || (base_reg == XED_REG_ESP) || (base_reg == XED_REG_RSP)) {
+    if ((base_reg == ZYDIS_REGISTER_SP) || (base_reg == ZYDIS_REGISTER_ESP) || (base_reg == ZYDIS_REGISTER_RSP)) {
       int64_t disp = xed_decoded_inst_get_memory_displacement(src, 0) + stack_offset;
       // always use disp width 4 in this case
       xed_encoder_request_set_memory_displacement(dest, disp, 4);
@@ -223,7 +288,7 @@ void CopyOperandFromInstruction(xed_decoded_inst_t *src,
 }
 
 
-uint32_t Mov(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t base_reg, int32_t displacement, xed_reg_enum_t r2, unsigned char *encoded, size_t encoded_size) {
+uint32_t Mov(xed_state_t *dstate, uint32_t operand_width, ZYDIS_REGISTER_enum_t base_reg, int32_t displacement, ZYDIS_REGISTER_enum_t r2, unsigned char *encoded, size_t encoded_size) {
   uint32_t olen;
   xed_error_enum_t xed_error;
 
@@ -252,7 +317,7 @@ uint32_t Mov(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t base_re
   return olen;
 }
 
-uint32_t Lzcnt(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t dest_reg, xed_reg_enum_t src_reg, unsigned char *encoded, size_t encoded_size) {
+uint32_t Lzcnt(xed_state_t *dstate, uint32_t operand_width, ZYDIS_REGISTER_enum_t dest_reg, ZYDIS_REGISTER_enum_t src_reg, unsigned char *encoded, size_t encoded_size) {
   uint32_t olen;
   xed_error_enum_t xed_error;
 
@@ -277,7 +342,7 @@ uint32_t Lzcnt(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t dest_
   return olen;
 }
 
-uint32_t CmpImm8(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t dest_reg, uint64_t imm, unsigned char *encoded, size_t encoded_size) {
+uint32_t CmpImm8(xed_state_t *dstate, uint32_t operand_width, ZYDIS_REGISTER_enum_t dest_reg, uint64_t imm, unsigned char *encoded, size_t encoded_size) {
   uint32_t olen;
   xed_error_enum_t xed_error;
 
@@ -302,7 +367,7 @@ uint32_t CmpImm8(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t des
   return olen;
 }
 
-uint32_t Pushaq(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size)
+uint32_t Pushaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size)
 {
 	uint32_t olen = 0;
     if (dstate->mmode == XED_MACHINE_MODE_LONG_64)
@@ -327,7 +392,7 @@ uint32_t Pushaq(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size
     return olen;
 }
 
-uint32_t Popaq(xed_state_t* dstate, unsigned char* encoded, size_t encoded_size)
+uint32_t Popaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size)
 {
 	uint32_t olen = 0;
 	if (dstate->mmode == XED_MACHINE_MODE_LONG_64)
@@ -376,3 +441,4 @@ void FixRipDisplacement(xed_encoder_request_t *inst, size_t mem_address, size_t 
   
   xed_encoder_request_set_memory_displacement(inst, fixed_disp, 4);
 }
+#endif

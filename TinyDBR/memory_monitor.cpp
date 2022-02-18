@@ -26,15 +26,15 @@ InstructionResult MemoryMonitor::InstrumentInstruction(
 		uint8_t pushfq[] = { 0x9C };
 		uint8_t popfq[]  = { 0x9D };
 
-		xed_state_t dstate;
-		dstate.mmode            = (xed_machine_mode_enum_t)child_ptr_size == 8
-									  ? XED_MACHINE_MODE_LONG_64
-									  : XED_MACHINE_MODE_LEGACY_32;
-		dstate.stack_addr_width = (xed_address_width_enum_t)child_ptr_size;
+		//xed_state_t dstate;
+		//dstate.mmode            = (xed_machine_mode_enum_t)child_ptr_size == 8
+		//							  ? XED_MACHINE_MODE_LONG_64
+		//							  : XED_MACHINE_MODE_LEGACY_32;
+		//dstate.stack_addr_width = (xed_address_width_enum_t)child_ptr_size;
 
-		xed_error_enum_t xed_error   = XED_ERROR_NONE;
-		uint32_t         olen        = 0;
-		unsigned char    encoded[32] = { 0 };
+		//xed_error_enum_t xed_error   = XED_ERROR_NONE;
+		//uint32_t         olen        = 0;
+		//unsigned char    encoded[32] = { 0 };
 
 
 
@@ -47,21 +47,21 @@ bool MemoryMonitor::NeedToHandle(Instruction& inst)
 	bool need_handle = false;
 	do
 	{
-		const xed_decoded_inst_t* xedd         = &inst.xedd;
-		xed_uint_t                mem_op_count = xed_decoded_inst_number_of_memory_operands(xedd);
-		if (mem_op_count == 0)
-		{
-			break;
-		}
+		//const xed_decoded_inst_t* xedd         = &inst.xedd;
+		//xed_uint_t                mem_op_count = xed_decoded_inst_number_of_memory_operands(xedd);
+		//if (mem_op_count == 0)
+		//{
+		//	break;
+		//}
 
-		xed_category_enum_t category = xed_decoded_inst_get_category(xedd);
-		if (m_flags & MonitorFlag::IgnoreCode)
-		{
-			if (category == XED_CATEGORY_CALL || category == XED_CATEGORY_UNCOND_BR)
-			{
-				break;
-			}
-		}
+		//xed_category_enum_t category = xed_decoded_inst_get_category(xedd);
+		//if (m_flags & MonitorFlag::IgnoreCode)
+		//{
+		//	if (category == XED_CATEGORY_CALL || category == XED_CATEGORY_UNCOND_BR)
+		//	{
+		//		break;
+		//	}
+		//}
 
 		if (m_flags & MonitorFlag::IgnoreStack && assembler_->IsRspRelative(inst))
 		{

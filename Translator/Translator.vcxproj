@@ -72,22 +72,22 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(SolutionDir)TinyDBR;$(SolutionDir)ThirdParty\xed\obj\wkit\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)TinyDBR;$(SolutionDir)ThirdParty\zydis\dependencies\zycore\include;$(SolutionDir)ThirdParty\zydis\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(SolutionDir)TinyDBR;$(SolutionDir)ThirdParty\xed\obj\wkit\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)TinyDBR;$(SolutionDir)ThirdParty\zydis\dependencies\zycore\include;$(SolutionDir)ThirdParty\zydis\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(SolutionDir)TinyDBR;$(SolutionDir)ThirdParty\xed\obj\wkit\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)TinyDBR;$(SolutionDir)ThirdParty\zydis\dependencies\zycore\include;$(SolutionDir)ThirdParty\zydis\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(SolutionDir)TinyDBR;$(SolutionDir)ThirdParty\xed\obj\wkit\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)TinyDBR;$(SolutionDir)ThirdParty\zydis\dependencies\zycore\include;$(SolutionDir)ThirdParty\zydis\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -141,6 +141,9 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>TinyDBR.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>echo F|xcopy $(OutDir)Translator.dll /d /k /y D:\Code\UnrealProjects\UmgUI\Output\WindowsNoEditor\Engine\Binaries\Win64\TinyDBR.dll</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>

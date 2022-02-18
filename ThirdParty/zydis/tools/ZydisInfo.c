@@ -1239,8 +1239,90 @@ void PrintUsage(int argc, char *argv[])
         CVT100_ERR(ZYAN_VT100SGR_RESET));
 }
 
+void Test()
+{
+	ZyanU8 data[] = {
+		0xEB, 0x2B, 0xC3, 0x24, 0x23, 0x12, 0x00, 0x00, 0x48, 0x8B, 0x44, 0x24, 0x01,
+		0x08, 0xFF, 0x15, 0xA0, 0xA5, 0x48, 0x76, 0x85, 0xC0, 0x0F,
+		0x88, 0xFC, 0xDA, 0x02, 0x00
+	};
+
+	// Initialize decoder context
+	ZydisDecoder decoder;
+	ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64);
+
+	// Initialize formatter. Only required when you actually plan to do instruction
+	// formatting ("disassembling"), like we do here
+	ZydisFormatter formatter;
+	ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
+
+	// Loop over the instructions in our buffer.
+	// The runtime-address (instruction pointer) is chosen arbitrary here in order to better
+	// visualize relative addressing
+	ZyanU64                 runtime_address = 0x007FFFFFFF400000;
+	ZyanUSize               offset          = 0;
+	const ZyanUSize         length          = sizeof(data);
+	ZydisDecodedInstruction instruction;
+	ZydisDecodedOperand     operands[ZYDIS_MAX_OPERAND_COUNT_VISIBLE];
+	while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(&decoder, data + offset, length - offset,
+											   &instruction, operands, ZYDIS_MAX_OPERAND_COUNT_VISIBLE,
+											   ZYDIS_DFLAG_VISIBLE_OPERANDS_ONLY)))
+	{
+		// Print current instruction pointer.
+		printf("%016" PRIX64 "  ", runtime_address);
+
+		// Format & print the binary instruction structure to human readable format
+		char buffer[256];
+		ZydisFormatterFormatInstruction(&formatter, &instruction, operands,
+										instruction.operand_count_visible, buffer, sizeof(buffer), runtime_address);
+		puts(buffer);
+
+		offset += instruction.length;
+		runtime_address += instruction.length;
+	}
+}
+
+void TestEncode()
+{
+	ZyanU8              encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+	ZyanUSize           encoded_length = sizeof(encoded_instruction);
+	ZydisEncoderRequest req;
+	ZYAN_MEMSET(&req, 0, sizeof(req));
+	req.mnemonic              = ZYDIS_MNEMONIC_MOV;
+	req.machine_mode          = ZYDIS_MACHINE_MODE_LONG_64;
+	req.operand_count         = 2;
+	req.address_size_hint     = ZYDIS_ADDRESS_SIZE_HINT_64;
+	req.operand_size_hint     = ZYDIS_OPERAND_SIZE_HINT_64;
+
+	req.operands[0].type      = ZYDIS_OPERAND_TYPE_REGISTER;
+	req.operands[0].reg.value = ZYDIS_REGISTER_RAX;
+
+	req.operands[1].type      = ZYDIS_OPERAND_TYPE_MEMORY;
+	req.operands[1].mem.base  = ZYDIS_REGISTER_RSP;
+	req.operands[1].mem.displacement  = 0x1234;
+	req.operands[1].mem.size = 0x8;
+
+ //   req.operands[1].type  = ZYDIS_OPERAND_TYPE_IMMEDIATE;
+	//req.operands[1].imm.u = 0x1337;
+	//req.operands[1].type  = ZYDIS_OPERAND_TYPE_REGISTER;
+	//req.operands[1].reg.value = ZYDIS_REGISTER_RSP;
+
+	if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(&req, encoded_instruction, &encoded_length)))
+	{
+		ZYAN_PUTS("Failed to encode instruction");
+		return 1;
+	}
+	for (ZyanUSize i = 0; i < encoded_length; ++i)
+	{
+		ZYAN_PRINTF("%02X ", encoded_instruction[i]);
+	}
+	ZYAN_PUTS("");
+}
+
 int main(int argc, char** argv)
 {
+	Test();
+	TestEncode();
     // Enable VT100 escape sequences on Windows, if the output is not redirected
     g_vt100_stdout = (ZyanTerminalIsTTY(ZYAN_STDSTREAM_OUT) == ZYAN_STATUS_TRUE) &&
                      ZYAN_SUCCESS(ZyanTerminalEnableVT100(ZYAN_STDSTREAM_OUT));
