@@ -20,15 +20,12 @@ limitations under the License.
 #include "..\..\assembler.h"
 #include "..\..\tinydbr.h"
 
-#include <Zydis/Zydis.h>
-
 class X86Assembler : public Assembler
 {
 public:
 	using Assembler::Assembler;
-	virtual ~X86Assembler()
-	{
-	}
+	virtual ~X86Assembler();
+
 	void Init() override;
 
 	bool DecodeInstruction(Instruction&         inst,
@@ -97,6 +94,7 @@ private:
 		const ZydisDecodedOperand* operands,
 		size_t                     count,
 		size_t*                    index = nullptr);
+	bool IsIndirectBranch(Instruction& inst);
 
 private:
 	ZydisDecoder decoder;

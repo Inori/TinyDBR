@@ -1,2 +1,0 @@
-xedext main
-mbuild main

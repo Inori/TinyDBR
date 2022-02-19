@@ -163,11 +163,28 @@ bool X86Assembler::IsRipRelative(ModuleInfo*  module,
 								 size_t       instruction_address,
 								 size_t*      mem_address)
 {
+	bool        rip_relative = false;
 	const auto& zinst        = inst.zinst;
-	bool        rip_relative = zinst.instruction.attributes & ZYDIS_ATTRIB_IS_RELATIVE;
+	bool        is_relative = zinst.instruction.attributes & ZYDIS_ATTRIB_IS_RELATIVE;
 
-	if (!rip_relative)
+	if (!is_relative)
+	{
 		return false;
+	}
+	
+    auto operand = FindExplicitMemoryOperand(inst.zinst.operands, inst.zinst.instruction.operand_count_visible);
+    if (!operand)
+    {
+		return false;
+    }
+
+    rip_relative = operand->mem.base == ZYDIS_REGISTER_EIP ||
+				   operand->mem.base == ZYDIS_REGISTER_RIP;
+
+    if (!rip_relative)
+    {
+		return false;
+    }
 
 	int64_t disp = zinst.instruction.raw.disp.value;
 
@@ -187,34 +204,18 @@ bool X86Assembler::IsRspRelative(Instruction& inst,
 								 size_t*      displacement)
 {
 	bool rsp_relative = false;
+	auto operand = FindExplicitMemoryOperand(inst.zinst.operands, inst.zinst.instruction.operand_count_visible);
 
-    const auto& zinst = inst.zinst;
-	for (ZyanU8 i = 0; i != zinst.instruction.operand_count; ++i)
-    {
-		const auto& operand = zinst.operands[i];
-		if (operand.visibility != ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
-        {
-            continue;
-        }
-
-		if (operand.type != ZYDIS_OPERAND_TYPE_MEMORY)
-        {
-            continue;
-        }
-
-        if (operand.mem.base == ZYDIS_REGISTER_SP ||
-			operand.mem.base == ZYDIS_REGISTER_ESP||
-			operand.mem.base == ZYDIS_REGISTER_RSP)
-        {
-			rsp_relative = true;
-			if (displacement && operand.mem.disp.has_displacement)
-            {
-				*displacement = operand.mem.disp.value;
-            }
-            break;
-        }
-    }
-	
+	if (operand->mem.base == ZYDIS_REGISTER_SP ||
+		operand->mem.base == ZYDIS_REGISTER_ESP ||
+		operand->mem.base == ZYDIS_REGISTER_RSP)
+	{
+		rsp_relative = true;
+		if (displacement && operand->mem.disp.has_displacement)
+		{
+			*displacement = operand->mem.disp.value;
+		}
+	}
 	return rsp_relative;
 }
 
@@ -312,51 +313,52 @@ void X86Assembler::TranslateJmp(ModuleInfo *module,
   }
 }
 
-void X86Assembler::InstrumentRet(ModuleInfo *module,
-                                 Instruction &inst,
-                                 size_t instruction_address,
-                                 TinyDBR::IndirectInstrumentation mode,
-                                 size_t bb_address) {
-  // lots of moving around, but the problem is
-  // we need to store context in the same place
-  // where the return address is
+void X86Assembler::InstrumentRet(ModuleInfo*                      module,
+								 Instruction&                     inst,
+								 size_t                           instruction_address,
+								 TinyDBR::IndirectInstrumentation mode,
+								 size_t                           bb_address)
+{
+	// lots of moving around, but the problem is
+	// we need to store context in the same place
+	// where the return address is
 
-  // at the end, the stack must be
-  // saved RAX
-  // saved EFLAGS
-  // <sp_offset>
-  // and RAX must contain return address
-    
-  const auto& zinst = inst.zinst;
-  // store rax to a safe offset
-  int32_t ax_offset = -tinyinst_.sp_offset - 2 * tinyinst_.child_ptr_size;
-  WriteStack(module, ax_offset);
-  // copy return address to a safe offset
-  int32_t ret_offset = ax_offset - tinyinst_.child_ptr_size;
-  ReadStack(module, 0);
-  WriteStack(module, ret_offset);
-  // get ret immediate
-  int32_t imm = zinst.instruction.raw.imm[0].value.u;
-  // align the stack
-  int32_t ret_pop =
-      (int32_t)tinyinst_.child_ptr_size + imm - tinyinst_.sp_offset;
-  OffsetStack(module, ret_pop);  // pop
-  ax_offset -= ret_pop;
-  ret_offset -= ret_pop;
-  // write data to stack
-  tinyinst_.WriteCode(module, PUSH_F, sizeof(PUSH_F));
-  ax_offset += tinyinst_.child_ptr_size;
-  ret_offset += tinyinst_.child_ptr_size;
-  ReadStack(module, ax_offset);
-  tinyinst_.WriteCode(module, PUSH_A, sizeof(PUSH_A));
-  ax_offset += tinyinst_.child_ptr_size;
-  ret_offset += tinyinst_.child_ptr_size;
-  ReadStack(module, ret_offset);
-  tinyinst_.InstrumentIndirect(module,
-                               inst,
-                               instruction_address,
-                               mode,
-                               bb_address);
+	// at the end, the stack must be
+	// saved RAX
+	// saved EFLAGS
+	// <sp_offset>
+	// and RAX must contain return address
+
+	const auto& zinst = inst.zinst;
+	// store rax to a safe offset
+	int32_t ax_offset = -tinyinst_.sp_offset - 2 * tinyinst_.child_ptr_size;
+	WriteStack(module, ax_offset);
+	// copy return address to a safe offset
+	int32_t ret_offset = ax_offset - tinyinst_.child_ptr_size;
+	ReadStack(module, 0);
+	WriteStack(module, ret_offset);
+	// get ret immediate
+	int32_t imm = zinst.instruction.raw.imm[0].value.u;
+	// align the stack
+	int32_t ret_pop =
+		(int32_t)tinyinst_.child_ptr_size + imm - tinyinst_.sp_offset;
+	OffsetStack(module, ret_pop);  // pop
+	ax_offset -= ret_pop;
+	ret_offset -= ret_pop;
+	// write data to stack
+	tinyinst_.WriteCode(module, PUSH_F, sizeof(PUSH_F));
+	ax_offset += tinyinst_.child_ptr_size;
+	ret_offset += tinyinst_.child_ptr_size;
+	ReadStack(module, ax_offset);
+	tinyinst_.WriteCode(module, PUSH_A, sizeof(PUSH_A));
+	ax_offset += tinyinst_.child_ptr_size;
+	ret_offset += tinyinst_.child_ptr_size;
+	ReadStack(module, ret_offset);
+	tinyinst_.InstrumentIndirect(module,
+								 inst,
+								 instruction_address,
+								 mode,
+								 bb_address);
 }
 
 // converts an indirect jump/call into a MOV instruction
@@ -403,8 +405,6 @@ void X86Assembler::MovIndirectTarget(ModuleInfo*  module,
 
 	if (operand.type == ZYDIS_OPERAND_TYPE_MEMORY)
 	{
-		// TODO:
-		// need segment register?
 		mov.operands[1].type      = ZYDIS_OPERAND_TYPE_MEMORY;
 		mov.operands[1].mem.base  = operand.mem.base;
 		mov.operands[1].mem.index = operand.mem.index;
@@ -420,11 +420,6 @@ void X86Assembler::MovIndirectTarget(ModuleInfo*  module,
 		{
 			// printf("base = sp\n");
 			int64_t disp = operand.mem.disp.value + stack_offset;
-
-			// always use disp width 4 in this case
-			// TODO:
-			// it seems zydis can't custom displament width.
-			// WARN("call [rsp+disp], not support 4 bytes displament.");
 			mov.operands[1].mem.displacement = disp;
 		}
 		else
@@ -461,7 +456,7 @@ void X86Assembler::MovIndirectTarget(ModuleInfo*  module,
 					  out_instruction_size);
 		mov.operands[1].mem.displacement = fixed_disp;
 		encoded_length                   = sizeof(encoded_instruction);
-		zstatus = ZydisEncoderEncodeInstruction(&mov, encoded_instruction, &encoded_length);
+		zstatus                          = ZydisEncoderEncodeInstruction(&mov, encoded_instruction, &encoded_length);
 		if (ZYAN_FAILED(zstatus))
 		{
 			FATAL("Error encoding instruction");
@@ -478,11 +473,12 @@ void X86Assembler::MovIndirectTarget(ModuleInfo*  module,
 
 // translates indirect jump or call
 // using global jumptable
-void X86Assembler::InstrumentGlobalIndirect(ModuleInfo *module,
-                                            Instruction &inst,
-                                            size_t instruction_address) {
+void X86Assembler::InstrumentGlobalIndirect(ModuleInfo*  module,
+											Instruction& inst,
+											size_t       instruction_address)
+{
 
-    auto category = inst.zinst.instruction.meta.category;
+	auto category = inst.zinst.instruction.meta.category;
 	if (category != ZYDIS_CATEGORY_RET)
 	{
 		if (tinyinst_.sp_offset)
@@ -544,10 +540,11 @@ void X86Assembler::InstrumentGlobalIndirect(ModuleInfo *module,
 
 // translates indirect jump or call
 // using local jumptable
-void X86Assembler::InstrumentLocalIndirect(ModuleInfo *module,
-                                           Instruction &inst,
-                                           size_t instruction_address,
-                                           size_t bb_address) {
+void X86Assembler::InstrumentLocalIndirect(ModuleInfo*  module,
+										   Instruction& inst,
+										   size_t       instruction_address,
+										   size_t       bb_address)
+{
 	auto category = inst.zinst.instruction.meta.category;
 	if (category != ZYDIS_CATEGORY_RET)
 	{
@@ -634,19 +631,33 @@ const ZydisDecodedOperand* X86Assembler::FindExplicitMemoryOperand(
 	size_t                     count,
 	size_t*                    index)
 {
-    for (size_t i = 0; i != count; ++i)
-    {
+	for (size_t i = 0; i != count; ++i)
+	{
 		if (operands[i].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-            operands[i].visibility == ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
-        {
-            if (index)
-            {
+			operands[i].visibility == ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
+		{
+			if (index)
+			{
 				*index = i;
-            }
+			}
 			return &operands[i];
-        }
-    }
+		}
+	}
 	return nullptr;
+}
+
+// detect if instruction is indirect jmp or call
+bool X86Assembler::IsIndirectBranch(Instruction& inst)
+{
+	auto brance_type  = inst.zinst.instruction.meta.branch_type;
+	if (brance_type == ZYDIS_BRANCH_TYPE_NONE)
+	{
+		return false;
+	}
+
+	// must have a operand
+	auto operand_type = inst.zinst.operands[0].type;
+	return operand_type == ZYDIS_OPERAND_TYPE_REGISTER || operand_type == ZYDIS_OPERAND_TYPE_MEMORY;
 }
 
 // outputs instruction into the translated code buffer
@@ -683,7 +694,7 @@ void X86Assembler::FixInstructionAndOutput(
         &req);
 
 	ZyanU8    encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH] = { 0 };
-	ZyanUSize encoded_length = sizeof(encoded_instruction);
+	ZyanUSize encoded_length                                    = sizeof(encoded_instruction);
 
 	if (convert_call_to_jmp)
 	{
@@ -715,17 +726,17 @@ void X86Assembler::FixInstructionAndOutput(
 	if (llabs(fixed_disp) > 0x7FFFFFFF)
 		FATAL("Offset larger than 2G");
 
-    size_t mem_idx = 0;
+	size_t mem_idx = 0;
 	auto   operand = FindExplicitMemoryOperand(zinst.operands, zinst.instruction.operand_count, &mem_idx);
-    if (!operand)
-    {
+	if (!operand)
+	{
 		FATAL("No memory operand for a rip-relative instruction.");
-    }
+	}
 
-    encoded_length                         = sizeof(encoded_instruction);
-    req.operands[mem_idx].mem.displacement = fixed_disp;
+	encoded_length                         = sizeof(encoded_instruction);
+	req.operands[mem_idx].mem.displacement = fixed_disp;
 
-    zstatus = ZydisEncoderEncodeInstruction(&req, encoded_instruction, &encoded_length);
+	zstatus = ZydisEncoderEncodeInstruction(&req, encoded_instruction, &encoded_length);
 	if (ZYAN_FAILED(zstatus))
 	{
 		FATAL("Error encoding instruction");
@@ -747,15 +758,15 @@ void X86Assembler::FixInstructionAndOutput(
 	if (llabs(fixed_disp) > 0x7FFFFFFF)
 		FATAL("Offset larger than 2G");
 
-    encoded_length                         = sizeof(encoded_instruction);
-    req.operands[mem_idx].mem.displacement = fixed_disp;
-	zstatus = ZydisEncoderEncodeInstruction(&req, encoded_instruction, &encoded_length);
+	encoded_length                         = sizeof(encoded_instruction);
+	req.operands[mem_idx].mem.displacement = fixed_disp;
+	zstatus                                = ZydisEncoderEncodeInstruction(&req, encoded_instruction, &encoded_length);
 	if (ZYAN_FAILED(zstatus))
 	{
 		FATAL("Error encoding instruction");
 	}
 
-    void* code_buffer = module->instrumented_code_local +
+	void* code_buffer = module->instrumented_code_local +
 						module->instrumented_code_allocated;
 	memcpy(code_buffer, encoded_instruction, encoded_length);
 
@@ -766,6 +777,7 @@ void X86Assembler::FixInstructionAndOutput(
 
 	module->instrumented_code_allocated += encoded_length;
 }
+
 
 bool X86Assembler::DecodeInstruction(Instruction&         inst,
 									 const unsigned char* buffer,
@@ -778,9 +790,9 @@ bool X86Assembler::DecodeInstruction(Instruction&         inst,
 	if (ZYAN_FAILED(zstatus))
 		return false;
 
-	inst.address = (size_t)buffer;
-	inst.length  = inst.zinst.instruction.length;
-	inst.bbend   = false;
+	inst.address                 = (size_t)buffer;
+	inst.length                  = inst.zinst.instruction.length;
+	inst.bbend                   = false;
 
 	ZydisInstructionCategory category    = inst.zinst.instruction.meta.category;
 	ZydisMnemonic            mnemonic    = inst.zinst.instruction.mnemonic;
@@ -822,14 +834,13 @@ bool X86Assembler::DecodeInstruction(Instruction&         inst,
 // fixes an offset in the jump instruction (at offset jmp_offset in the
 // instrumented code) to jump to the given basic block (at offset bb in the
 // original code)
-void X86Assembler::FixOffset(ModuleInfo* module,
-							 uint32_t    jmp_offset,
-							 uint32_t    target_offset)
-{
-	int32_t jmp_relative_offset =
-		(int32_t)target_offset - (int32_t)(jmp_offset + 4);
-	*(int32_t*)(module->instrumented_code_local + jmp_offset) =
-		jmp_relative_offset;
+void X86Assembler::FixOffset(ModuleInfo *module,
+                             uint32_t jmp_offset,
+                             uint32_t target_offset) {
+  int32_t jmp_relative_offset =
+    (int32_t)target_offset - (int32_t)(jmp_offset + 4);
+  *(int32_t *)(module->instrumented_code_local + jmp_offset) =
+    jmp_relative_offset;
 }
 
 void X86Assembler::HandleBasicBlockEnd(
@@ -842,10 +853,8 @@ void X86Assembler::HandleBasicBlockEnd(
 	size_t                                    offset,
 	size_t                                    last_offset)
 {
-
 	const auto&                zinst      = inst.zinst;
 	ZydisInstructionCategory   category   = zinst.instruction.meta.category;
-	ZydisInstructionAttributes attributes = zinst.instruction.attributes;
 
 	if (category == ZYDIS_CATEGORY_RET)
 	{
@@ -879,9 +888,7 @@ void X86Assembler::HandleBasicBlockEnd(
 		//   <edge instrumentation>
 		//   jmp target_address
 
-		// must have an operand
-
-		if (!(attributes & ZYDIS_ATTRIB_IS_RELATIVE))
+		if (IsIndirectBranch(inst))
 		{
 			FATAL("Error getting branch target");
 		}
@@ -907,7 +914,7 @@ void X86Assembler::HandleBasicBlockEnd(
 		ZyanUSize           encoded_length                                    = sizeof(encoded_instruction);
 		uint32_t            jump_size                                         = 0;
 		ZydisEncoderRequest req                                               = {};
-		ZyanStatus          zstatus                                           = ZydisEncoderDecodedInstructionToEncoderRequest(
+		ZyanStatus          zstatus = ZydisEncoderDecodedInstructionToEncoderRequest(
             &zinst.instruction,
             zinst.operands,
             zinst.instruction.operand_count_visible,
@@ -980,8 +987,7 @@ void X86Assembler::HandleBasicBlockEnd(
 	}
 	else if (category == ZYDIS_CATEGORY_UNCOND_BR)
 	{
-
-		if (attributes & ZYDIS_ATTRIB_IS_RELATIVE)
+		if (!IsIndirectBranch(inst))
 		{
 			// jmp address
 			// gets instrumented as:
@@ -1009,7 +1015,6 @@ void X86Assembler::HandleBasicBlockEnd(
 		}
 		else
 		{
-			// jmp reg
 			TinyDBR::IndirectInstrumentation ii_mode =
 				tinyinst_.ShouldInstrumentIndirect(module,
 												   inst,
@@ -1033,8 +1038,7 @@ void X86Assembler::HandleBasicBlockEnd(
 	}
 	else if (category == ZYDIS_CATEGORY_CALL)
 	{
-
-		if (attributes & ZYDIS_ATTRIB_IS_RELATIVE)
+		if (!IsIndirectBranch(inst))
 		{
 			// call target_address
 			// gets instrumented as:
@@ -1203,7 +1207,12 @@ void X86Assembler::HandleBasicBlockEnd(
 	}
 }
 
-void X86Assembler::Init() {
+X86Assembler::~X86Assembler()
+{
+}
+
+void X86Assembler::Init()
+{
 	ZydisMachineMode machine_mode = tinyinst_.child_ptr_size == 8
 										? ZYDIS_MACHINE_MODE_LONG_64
 										: ZYDIS_MACHINE_MODE_LEGACY_32;

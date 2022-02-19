@@ -1,3 +1,0 @@
-Request: IRETD MODE:1, SMODE:1
-Encodable! CF
-.byte 0xcf

@@ -1,3 +1,0 @@
-Request: CLD MODE:1, SMODE:1
-Encodable! FC
-.byte 0xfc

@@ -1,3 +1,0 @@
-Request: CMPSQ EOSZ:3, MODE:2, SMODE:2
-Encodable! 48A7
-.byte 0x48,0xa7

@@ -1,3 +1,0 @@
-Request: LODSD MODE:1, SMODE:1
-Encodable! AD
-.byte 0xad

@@ -20,6 +20,7 @@ limitations under the License.
 #ifdef ARM64
 #include "third_party/reil/reil/aarch64/decoder.h"
 #else
+
 #include <Zydis/Zydis.h>
 
 struct ZydisInstruction

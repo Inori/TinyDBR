@@ -1,1 +1,0 @@
- BUILDDIR/xed-asmparse-main -q jnz 0x70

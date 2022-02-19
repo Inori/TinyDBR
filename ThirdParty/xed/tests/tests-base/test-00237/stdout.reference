@@ -1,5 +1,0 @@
-Encode request:
-POP REG0:DX, SMODE:1
-OPERAND ORDER: REG0 
-
-Encodable! 5A

@@ -1,3 +1,0 @@
-Request: SYSRET EOSZ:3, MODE:2, SMODE:2
-Encodable! 480F07
-.byte 0x48,0x0f,0x07

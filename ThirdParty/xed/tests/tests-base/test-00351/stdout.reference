@@ -1,3 +1,0 @@
-Request: CMPSD MODE:1, SMODE:1
-Encodable! A7
-.byte 0xa7

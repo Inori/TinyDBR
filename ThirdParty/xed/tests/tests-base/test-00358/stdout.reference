@@ -1,3 +1,0 @@
-Request: LODSW EOSZ:1, MODE:1, SMODE:1
-Encodable! 66AD
-.byte 0x66,0xad

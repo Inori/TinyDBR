@@ -1,1 +1,0 @@
-../../../tests/run-cmd.py --bulk-make-tests bulk-tests.txt --build-dir ../../../obj
