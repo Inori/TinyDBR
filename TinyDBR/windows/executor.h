@@ -2,7 +2,6 @@
 
 #include "arch/x86/reg.h"
 #include "common.h"
-#include "singleton.h"
 #include "api_helper.h"
 
 #include <list>
@@ -15,21 +14,17 @@
 
 #include <Windows.h>
 
-typedef struct _EXCEPTION_RECORD   EXCEPTION_RECORD;
-typedef struct _EXCEPTION_POINTERS EXCEPTION_POINTERS;
-typedef union _LDR_DLL_NOTIFICATION_DATA LDR_DLL_NOTIFICATION_DATA;
-
-class TinyDBR;
-
 
 struct SavedRegisters
 {
 	CONTEXT saved_context;
 };
 
-class Executor : public Singleton<TinyDBR>
+typedef union _LDR_DLL_NOTIFICATION_DATA LDR_DLL_NOTIFICATION_DATA;
+
+
+class Executor
 {
-	friend class Singleton<TinyDBR>;
 	friend class UnwindGenerator;
 	friend class ApiHelper;
 	friend class ModuleHelper;
@@ -129,12 +124,14 @@ protected:
 	void SaveRegisters(Context* context, SavedRegisters* registers);
 	void RestoreRegisters(Context* context, SavedRegisters* registers);
 
-	uint32_t GetProcOffset(HMODULE module, const char* name);
+	uint32_t GetProcOffset(void* module, const char* name);
 
 protected:
 	int32_t child_ptr_size           = sizeof(void*);
 	bool    child_entrypoint_reached = false;
 	bool    shellcode_mode           = false;
+
+	static Executor* instance;
 
 private:
 	void* InstallVEHHandler();
@@ -157,9 +154,9 @@ private:
 							  size_t           size,
 							  MemoryProtection protection);
 
-	DWORD WindowsProtectionFlags(MemoryProtection protection);
+	uint32_t WindowsProtectionFlags(MemoryProtection protection);
 
-	DWORD GetLoadedModules(HMODULE** modules);
+	uint32_t GetLoadedModules(void** modules);
 
 	void ConvertException(EXCEPTION_RECORD* win_exception_record,
 						  Exception*        exception);
@@ -170,7 +167,7 @@ private:
 	void*  veh_handle             = nullptr;
 	void*  dll_notify_cookie      = nullptr;
 	size_t allocation_granularity = 0;
-	HANDLE self_handle            = NULL;
+	void*  self_handle            = nullptr;
 	bool   have_thread_context    = false;
 
 	std::vector<TargetModule>  instrument_modules;

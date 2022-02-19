@@ -19,7 +19,7 @@ limitations under the License.
 
 #include <Zydis/Zydis.h>
 
-#if 0
+
 
 
 ZyanU32       GetRegisterWidth(ZydisRegister reg);
@@ -27,6 +27,12 @@ ZydisRegister GetFullSizeRegister(ZydisRegister reg, int child_ptr_size);
 ZydisRegister GetUnusedRegister(ZydisRegister used_register, int operand_width);
 ZydisRegister Get8BitRegister(ZydisRegister reg);
 
+uint32_t Pushaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size);
+uint32_t Popaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size);
+
+size_t GetExplicitMemoryOperandCount(const ZydisDecodedOperand* operands, size_t count);
+
+#if 0
 uint32_t Push(xed_state_t* dstate, ZydisRegister r, unsigned char* encoded, size_t encoded_size);
 uint32_t Pop(xed_state_t* dstate, ZydisRegister r, unsigned char* encoded, size_t encoded_size);
 
@@ -38,8 +44,6 @@ uint32_t Lzcnt(xed_state_t* dstate, uint32_t operand_width, ZydisRegister dest_r
 
 uint32_t CmpImm8(xed_state_t* dstate, uint32_t operand_width, ZydisRegister dest_reg, uint64_t imm, unsigned char* encoded, size_t encoded_size);
 
-uint32_t Pushaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size);
-uint32_t Popaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size);
 
 
 void CopyOperandFromInstruction(xed_decoded_inst_t *src,

@@ -14,9 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "../../common.h"
+#include "common.h"
 #include "x86_helpers.h"
-#if 0
 
 ZydisRegister GetUnusedRegister(ZydisRegister used_register, int operand_width)
 {
@@ -194,6 +193,79 @@ ZydisRegister Get8BitRegister(ZydisRegister reg)
 }
 
 
+uint32_t Pushaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size)
+{
+	uint32_t olen = 0;
+	if (mmode == ZYDIS_MACHINE_MODE_LONG_64)
+	{
+		// push all general registers, except rsp
+		uint8_t pushad[] = { 0x50, 0x53, 0x51, 0x52, 0x55, 0x56, 0x57,
+							 0x41, 0x50, 0x41, 0x51, 0x41, 0x52, 0x41, 0x53, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57 };
+		if (encoded_size < sizeof(pushad))
+		{
+			olen = 0;
+		}
+		else
+		{
+			memcpy(encoded, pushad, sizeof(pushad));
+			olen = sizeof(pushad);
+		}
+	}
+	else
+	{
+		FATAL("Not implemented.");
+	}
+	return olen;
+}
+
+uint32_t Popaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size)
+{
+	uint32_t olen = 0;
+	if (mmode == ZYDIS_MACHINE_MODE_LONG_64)
+	{
+		uint8_t popad[] = { 0x41, 0x5F, 0x41, 0x5E, 0x41, 0x5D, 0x41,
+							0x5C, 0x41, 0x5B, 0x41, 0x5A, 0x41, 0x59, 0x41, 0x58, 0x5F, 0x5E, 0x5D, 0x5A, 0x59, 0x5B, 0x58 };
+		if (encoded_size < sizeof(popad))
+		{
+			olen = 0;
+		}
+		else
+		{
+			memcpy(encoded, popad, sizeof(popad));
+			olen = sizeof(popad);
+		}
+	}
+	else
+	{
+		FATAL("Not implemented.");
+	}
+	return olen;
+}
+
+
+size_t GetExplicitMemoryOperandCount(const ZydisDecodedOperand* operands, size_t count)
+{
+	size_t mem_operand_count = 0;
+	for (size_t i = 0; i != count; ++i)
+	{
+		auto& operand = operands[i];
+		if (operand.type != ZydisOperandType::ZYDIS_OPERAND_TYPE_MEMORY)
+		{
+			continue;
+		}
+
+		if (operand.visibility != ZydisOperandVisibility::ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
+		{
+			continue;
+		}
+
+		++mem_operand_count;
+	}
+	return mem_operand_count;
+}
+
+#if 0
+
 uint32_t Push(xed_state_t *dstate, ZYDIS_REGISTER_enum_t r, unsigned char *encoded, size_t encoded_size) {
   uint32_t olen;
   xed_error_enum_t xed_error;
@@ -365,55 +437,6 @@ uint32_t CmpImm8(xed_state_t *dstate, uint32_t operand_width, ZYDIS_REGISTER_enu
   }
 
   return olen;
-}
-
-uint32_t Pushaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size)
-{
-	uint32_t olen = 0;
-    if (dstate->mmode == XED_MACHINE_MODE_LONG_64)
-    {
-        // push all general registers, except rsp
-		uint8_t pushad[] = { 0x50, 0x53, 0x51, 0x52, 0x55, 0x56, 0x57, 
-            0x41, 0x50, 0x41, 0x51, 0x41, 0x52, 0x41, 0x53, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57 };
-		if (encoded_size < sizeof(pushad))
-		{
-			olen = 0;
-		}
-		else
-		{
-			memcpy(encoded, pushad, sizeof(pushad));
-			olen = sizeof(pushad);
-		}
-    }
-    else
-	{
-		FATAL("Not implemented.");
-	}
-    return olen;
-}
-
-uint32_t Popaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size)
-{
-	uint32_t olen = 0;
-	if (dstate->mmode == XED_MACHINE_MODE_LONG_64)
-	{
-		uint8_t popad[] = { 0x41, 0x5F, 0x41, 0x5E, 0x41, 0x5D, 0x41, 
-            0x5C, 0x41, 0x5B, 0x41, 0x5A, 0x41, 0x59, 0x41, 0x58, 0x5F, 0x5E, 0x5D, 0x5A, 0x59, 0x5B, 0x58 };
-		if (encoded_size < sizeof(popad))
-		{
-			olen = 0;
-		}
-		else
-		{
-			memcpy(encoded, popad, sizeof(popad));
-			olen = sizeof(popad);
-		}
-	}
-	else
-	{
-		FATAL("Not implemented.");
-	}
-	return olen;
 }
 
 uint32_t GetInstructionLength(xed_encoder_request_t *inst) {

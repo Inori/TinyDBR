@@ -53,7 +53,6 @@ class UnwindGeneratorMacOS;
 // for instrumented code
 #define CODE_SIZE_MULTIPLIER 4
 
-typedef struct xed_decoded_inst_s xed_decoded_inst_t;
 
 class ModuleInfo;
 

@@ -18,6 +18,15 @@ limitations under the License.
 
 #include "winunwind.h"
 #include "executor.h"
+#include <Windows.h>
+
+ WinUnwindData::WinUnwindData() :
+	table_registered(false),
+	register_breakpoint(0), register_continue_IP(0),
+	last_lookup_translate(NULL), last_lookup_other(NULL),
+	last_translated_entry(NULL)
+{
+}
 
 WinUnwindData::~WinUnwindData() {
   for (auto pair : unwind_infos)
@@ -126,8 +135,11 @@ void WinUnwindGenerator::OnModuleInstrumented(ModuleInfo* module) {
 
   DWORD exception_table_offset;
   DWORD exception_table_size;
-  if (!GetExceptionTableOffsetAndSize((char*)modulebuf, &exception_table_offset, &exception_table_size)) {
-    FATAL("Error getting exception table");
+  if (!GetExceptionTableOffsetAndSize((char*)modulebuf,
+									  (uint32_t*)&exception_table_offset,
+									  (uint32_t*)&exception_table_size))
+  {
+	  FATAL("Error getting exception table");
   }
   if ((size_t)exception_table_offset + exception_table_size > image_size) {
     FATAL("Exception table out of bounds");
@@ -254,7 +266,8 @@ UnwindInfo* WinUnwindGenerator::ReadUnwindInfo(ModuleInfo* module, unsigned char
   return NULL;
 }
 
-int WinUnwindGenerator::GetExceptionTableOffsetAndSize(char* data, DWORD* offset, DWORD *size) {
+int WinUnwindGenerator::GetExceptionTableOffsetAndSize(char* data, uint32_t* offset, uint32_t* size)
+{
   DWORD pe_offset;
   pe_offset = *((DWORD*)(data + 0x3C));
   char* pe = data + pe_offset;
@@ -393,7 +406,8 @@ void WinUnwindGenerator::FixUnwindCodes(UnwindInfo* info) {
   info->unwind_codes = new_unwind_codes;
 }
 
-DWORD WinUnwindGenerator::WriteUnwindInfo(ModuleInfo* module, UnwindInfo* info) {
+uint32_t WinUnwindGenerator::WriteUnwindInfo(ModuleInfo* module, UnwindInfo* info)
+{
   WinUnwindData* data = (WinUnwindData*)module->unwind_data;
 
   DWORD offset = (DWORD)module->instrumented_code_allocated;

@@ -2,9 +2,6 @@
 
 #include "tinydbr.h"
 
-
-
-
 enum MonitorFlag : uint64_t
 {
 	IgnoreCode        = 1 << 0,  // e.g. call [0x1234], jmp [0x1234]
@@ -14,11 +11,11 @@ enum MonitorFlag : uint64_t
 
 typedef uint64_t MonitorFlags;
 
-class MemoryMonitor : public TinyDBR
+class MemoryController : public TinyDBR
 {
 public:
-	MemoryMonitor(MonitorFlags flags);
-	virtual ~MemoryMonitor();
+	MemoryController(MonitorFlags flags);
+	virtual ~MemoryController();
 
 protected:
 	InstructionResult InstrumentInstruction(

@@ -1,10 +1,9 @@
 #include "executor.h"
 #include "dllnotify.h"
-#include "../tinydbr.h"
+#include "tinydbr.h"
 
-
-#include <Windows.h>
 #include <Psapi.h>
+
 
 Executor::Executor()
 {
@@ -14,9 +13,12 @@ Executor::~Executor()
 {
 }
 
+Executor* Executor::instance = nullptr;
+
 void Executor::Init(const std::vector<TargetModule>& target_modules,
 					const Options&                   options)
 {
+	instance           = this;
 	instrument_modules = target_modules;
 
 	shellcode_mode     = options.shellcode_mode;
@@ -99,7 +101,7 @@ long Executor::OnVEHException(EXCEPTION_POINTERS* ExceptionInfo)
 void Executor::OnEntrypoint()
 {
 	HMODULE* module_handles = NULL;
-	DWORD    num_modules    = GetLoadedModules(&module_handles);
+	DWORD    num_modules    = GetLoadedModules((void**)&module_handles);
 	for (DWORD i = 0; i < num_modules; i++)
 	{
 		char base_name[MAX_PATH];
@@ -327,7 +329,7 @@ void* Executor::RemoteAllocateAfter(
 	return ret_address;
 }
 
-DWORD Executor::WindowsProtectionFlags(MemoryProtection protection)
+uint32_t Executor::WindowsProtectionFlags(MemoryProtection protection)
 {
 	switch (protection)
 	{
@@ -344,7 +346,7 @@ DWORD Executor::WindowsProtectionFlags(MemoryProtection protection)
 	}
 }
 
-DWORD Executor::GetLoadedModules(HMODULE** modules)
+uint32_t Executor::GetLoadedModules(void** modules)
 {
 	DWORD    module_handle_storage_size = 1024 * sizeof(HMODULE);
 	HMODULE* module_handles             = (HMODULE*)malloc(module_handle_storage_size);
@@ -743,7 +745,7 @@ void Executor::RestoreRegisters(Context* context, SavedRegisters* registers)
 	memcpy(context, &registers->saved_context, sizeof(registers->saved_context));
 }
 
-uint32_t Executor::GetProcOffset(HMODULE module, const char* name)
+uint32_t Executor::GetProcOffset(void* module, const char* name)
 {
 	return api_helper->GetProcOffset(module, name);
 }
@@ -822,7 +824,7 @@ LONG WINAPI Executor::VectoredExceptionHandler(EXCEPTION_POINTERS* ExceptionInfo
 	LONG action = EXCEPTION_CONTINUE_SEARCH;
 	do
 	{
-		auto executor = TinyDBR::GetInstance();
+		Executor* executor = reinterpret_cast<Executor*>(instance);
 		if (!executor)
 		{
 			break;

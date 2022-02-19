@@ -26,17 +26,19 @@ limitations under the License.
 #include <set>
 #include <unordered_map>
 
-struct UnwindInfo {
-	BYTE version_flags;
-	BYTE prolog_size;
-	BYTE frame_register;
 
-	std::vector<USHORT> unwind_codes;
+struct UnwindInfo
+{
+	uint8_t version_flags;
+	uint8_t prolog_size;
+	uint8_t frame_register;
+
+	std::vector<uint16_t> unwind_codes;
 
 	size_t handler;
 	size_t handler_data;
 
-	DWORD translated_offset;
+	uint32_t translated_offset;
 };
 
 struct FunctionInfo {
@@ -63,10 +65,7 @@ struct FunctionTable {
 
 class WinUnwindData : public UnwindData {
 public:
-	WinUnwindData() : table_registered(false),
-		register_breakpoint(0), register_continue_IP(0),
-		last_lookup_translate(NULL), last_lookup_other(NULL),
-	  last_translated_entry(NULL) {}
+	WinUnwindData();
 
 	~WinUnwindData();
 
@@ -77,9 +76,9 @@ public:
 	std::vector<FunctionInfo *> original_function_infos;
 	std::set<size_t> handlers;
 
-	bool table_registered;
-	size_t register_breakpoint;
-	size_t register_continue_IP;
+	bool           table_registered;
+	size_t         register_breakpoint;
+	size_t         register_continue_IP;
 	SavedRegisters register_saved_registers;
 
 	struct ReturnAddressInfo {
@@ -153,11 +152,11 @@ public:
 protected:
 	UnwindInfo* ReadUnwindInfo(ModuleInfo* module, unsigned char* modulebuf, size_t image_size, uint32_t unwind_info_offset);
 
-	int GetExceptionTableOffsetAndSize(char* data, DWORD* offset, DWORD* size);
+	int GetExceptionTableOffsetAndSize(char* data, uint32_t* offset, uint32_t* size);
 
 	void WriteFunctionInfo(ModuleInfo* module, FunctionInfo *info, FunctionTable* functionTable);
 
-	DWORD WriteUnwindInfo(ModuleInfo* module, UnwindInfo* info);
+	uint32_t WriteUnwindInfo(ModuleInfo* module, UnwindInfo* info);
 
 	void WriteHandler(ModuleInfo* module, size_t original_handler);
 

@@ -172,7 +172,7 @@ bool X86Assembler::IsRipRelative(ModuleInfo*  module,
 		return false;
 	}
 	
-    auto operand = FindExplicitMemoryOperand(inst.zinst.operands, inst.zinst.instruction.operand_count_visible);
+    auto operand = FindExplicitMemoryOperand(inst);
     if (!operand)
     {
 		return false;
@@ -204,7 +204,7 @@ bool X86Assembler::IsRspRelative(Instruction& inst,
 								 size_t*      displacement)
 {
 	bool rsp_relative = false;
-	auto operand = FindExplicitMemoryOperand(inst.zinst.operands, inst.zinst.instruction.operand_count_visible);
+	auto operand      = FindExplicitMemoryOperand(inst);
 
 	if (operand->mem.base == ZYDIS_REGISTER_SP ||
 		operand->mem.base == ZYDIS_REGISTER_ESP ||
@@ -627,20 +627,21 @@ void X86Assembler::PushReturnAddress(ModuleInfo *module,
 }
 
 const ZydisDecodedOperand* X86Assembler::FindExplicitMemoryOperand(
-	const ZydisDecodedOperand* operands,
-	size_t                     count,
-	size_t*                    index)
+	const Instruction& inst,
+	size_t*            index)
 {
-	for (size_t i = 0; i != count; ++i)
+	const auto& zinst          = inst.zinst;
+	size_t      explicit_count = zinst.instruction.operand_count_visible;
+	for (size_t i = 0; i != explicit_count; ++i)
 	{
-		if (operands[i].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-			operands[i].visibility == ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
+		if (zinst.operands[i].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+			zinst.operands[i].visibility == ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
 		{
 			if (index)
 			{
 				*index = i;
 			}
-			return &operands[i];
+			return &zinst.operands[i];
 		}
 	}
 	return nullptr;
@@ -727,7 +728,7 @@ void X86Assembler::FixInstructionAndOutput(
 		FATAL("Offset larger than 2G");
 
 	size_t mem_idx = 0;
-	auto   operand = FindExplicitMemoryOperand(zinst.operands, zinst.instruction.operand_count, &mem_idx);
+	auto   operand = FindExplicitMemoryOperand(inst, &mem_idx);
 	if (!operand)
 	{
 		FATAL("No memory operand for a rip-relative instruction.");
