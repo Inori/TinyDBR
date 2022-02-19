@@ -460,6 +460,7 @@ void X86Assembler::MovIndirectTarget(ModuleInfo*  module,
 					  module->instrumented_code_allocated +
 					  out_instruction_size);
 		mov.operands[1].mem.displacement = fixed_disp;
+		encoded_length                   = sizeof(encoded_instruction);
 		zstatus = ZydisEncoderEncodeInstruction(&mov, encoded_instruction, &encoded_length);
 		if (ZYAN_FAILED(zstatus))
 		{
