@@ -204,6 +204,11 @@ void TinyDBR::CommitCode(ModuleInfo* module, size_t start_offset, size_t size)
 	if (!module->instrumented_code_remote)
 		return;
 
+	if (start_offset + size > module->instrumented_code_size )
+	{
+		FATAL("Not enough code space.");
+	}
+
 	RemoteWrite(module->instrumented_code_remote + start_offset,
 				module->instrumented_code_local + start_offset,
 				size);

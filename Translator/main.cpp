@@ -11,7 +11,7 @@
 * before the execution of main module entry point.
 */
 
-std::unique_ptr<MemoryController> instrumenter;
+std::unique_ptr<Executor> instrumenter;
 
 
 // For detours inject
@@ -49,6 +49,7 @@ void InitRewrite()
 
 		MonitorFlags flags = IgnoreCode | IgnoreStack | IgnoreRipRelative;
 		instrumenter       = std::make_unique<MemoryController>(flags);
+		//instrumenter = std::make_unique<TinyDBR>();
 
 		TargetModule main_module = {};
 		main_module.name         = module_name;

@@ -17,7 +17,6 @@ InstructionResult MemoryController::InstrumentInstruction(
 	size_t       instruction_address)
 {
 	InstructionResult action = INST_NOTHANDLED;
-	static unsigned char NOP5[] = { 0x90, 0x90, 0x90, 0x90, 0x90 };
 	do 
 	{
 		if (!NeedToHandle(inst))
@@ -31,6 +30,11 @@ InstructionResult MemoryController::InstrumentInstruction(
 			break;
 		}
 
+		if (zinst.instruction.mnemonic == ZYDIS_MNEMONIC_LEA)
+		{
+			break;
+		}
+
 		uint8_t pushfq[] = { 0x9C };
 		uint8_t popfq[]  = { 0x9D };
 
@@ -38,16 +42,14 @@ InstructionResult MemoryController::InstrumentInstruction(
 		size_t  encoded_length          = Pushaq(
 			ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
 
-		//WriteCode(module, encoded_instruction, encoded_length);
-		//WriteCode(module, pushfq, sizeof(pushfq));
-		WriteCode(module, NOP5, sizeof(NOP5));
+		WriteCode(module, encoded_instruction, encoded_length);
+		WriteCode(module, pushfq, sizeof(pushfq));
 
+		WriteCode(module, popfq, sizeof(popfq));
+		encoded_length = Popaq(
+			ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
+		WriteCode(module, encoded_instruction, encoded_length);
 		WriteCode(module, reinterpret_cast<void*>(inst.address), inst.length);
-
-		//WriteCode(module, popfq, sizeof(popfq));
-		//encoded_length = Popaq(
-		//	ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
-		//WriteCode(module, encoded_instruction, encoded_length);
 
 		action = INST_HANDLED;
 	} while (false);
