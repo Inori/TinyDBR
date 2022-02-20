@@ -1,0 +1,17 @@
+mov rbx, [rcx + 0x40]
+
+-------------------------------
+
+pushaq
+pushfq
+
+mov rcx, this
+lea rdx, [rcx+0x40]
+xor r8, r8
+xor r9, r9
+call MemoryOperate
+mov [rsp +], rax
+
+popfq
+popaq
+mov rbx, [rsp + ]
