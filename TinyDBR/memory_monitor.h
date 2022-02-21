@@ -11,11 +11,11 @@ enum MonitorFlag : uint64_t
 
 typedef uint64_t MonitorFlags;
 
-class MemoryController : public TinyDBR
+class MemoryMonitor : public TinyDBR
 {
 public:
-	MemoryController(MonitorFlags flags);
-	virtual ~MemoryController();
+	MemoryMonitor(MonitorFlags flags);
+	virtual ~MemoryMonitor();
 
 protected:
 	InstructionResult InstrumentInstruction(

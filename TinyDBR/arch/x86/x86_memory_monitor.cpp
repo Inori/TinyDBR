@@ -1,16 +1,16 @@
-#include "memory_controller.h"
+#include "memory_monitor.h"
 #include "x86_helpers.h"
 
-MemoryController::MemoryController(MonitorFlags flags):
+MemoryMonitor::MemoryMonitor(MonitorFlags flags):
 	m_flags(flags)
 {
 }
 
-MemoryController::~MemoryController()
+MemoryMonitor::~MemoryMonitor()
 {
 }
 
-InstructionResult MemoryController::InstrumentInstruction(
+InstructionResult MemoryMonitor::InstrumentInstruction(
 	ModuleInfo*  module,
 	Instruction& inst,
 	size_t       bb_address,
@@ -56,7 +56,7 @@ InstructionResult MemoryController::InstrumentInstruction(
 	return action;
 }
 
-bool MemoryController::NeedToHandle(Instruction& inst)
+bool MemoryMonitor::NeedToHandle(Instruction& inst)
 {
 	bool need_handle = false;
 	do
@@ -88,6 +88,9 @@ bool MemoryController::NeedToHandle(Instruction& inst)
 		{
 			break;
 		}
+
+		// TODO:
+		// filter gs and fs memory access.
 
 		need_handle  = true;
 	}while(false);

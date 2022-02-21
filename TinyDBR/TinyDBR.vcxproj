@@ -183,7 +183,7 @@
   <ItemGroup>
     <ClCompile Include="arch\x86\x86_assembler.cpp" />
     <ClCompile Include="arch\x86\x86_helpers.cpp" />
-    <ClCompile Include="arch\x86\x86_memory_controller.cpp" />
+    <ClCompile Include="arch\x86\x86_memory_monitor.cpp" />
     <ClCompile Include="common.cpp" />
     <ClCompile Include="tinydbr.cpp" />
     <ClCompile Include="windows\api_helper.cpp" />
@@ -198,7 +198,7 @@
     <ClInclude Include="assembler.h" />
     <ClInclude Include="common.h" />
     <ClInclude Include="instruction.h" />
-    <ClInclude Include="memory_controller.h" />
+    <ClInclude Include="memory_monitor.h" />
     <ClInclude Include="tinydbr.h" />
     <ClInclude Include="unwind.h" />
     <ClInclude Include="windows\api_helper.h" />
