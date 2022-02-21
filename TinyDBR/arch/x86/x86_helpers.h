@@ -30,7 +30,11 @@ ZydisRegister Get8BitRegister(ZydisRegister reg);
 uint32_t Pushaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size);
 uint32_t Popaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size);
 
-size_t GetExplicitMemoryOperandCount(const ZydisDecodedOperand* operands, size_t count);
+size_t GetExplicitMemoryOperandCount(
+    const ZydisDecodedOperand* operands, size_t count);
+
+const ZydisDecodedOperand* GetExplicitMemoryOperand(
+	const ZydisDecodedOperand* operands, size_t count);
 
 #if 0
 uint32_t Push(xed_state_t* dstate, ZydisRegister r, unsigned char* encoded, size_t encoded_size);

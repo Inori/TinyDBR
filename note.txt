@@ -1,3 +1,6 @@
+
+ModRM 
+==================
 mov rbx, [rcx + 0x40]
 
 -------------------------------
@@ -7,11 +10,35 @@ pushfq
 
 mov rcx, this
 lea rdx, [rcx+0x40]
-xor r8, r8
-xor r9, r9
-call MemoryOperate
-mov [rsp +], rax
+mov r8, 8
+call OnMemoryRead
 
 popfq
 popaq
-mov rbx, [rsp + ]
+mov rbx, [rcx + 0x40]
+
+-------------------------------
+
+
+mov [rcx + 0x40], rbx
+
+pushaq
+pushfq
+
+mov rcx, this
+lea rdx, [rcx + 0x40]
+mov r8, 8
+mov r9, rbx
+call OnMemoryWrite
+
+popfq
+popaq
+mov [rcx + 0x40], rbx
+
+
+movs
+==================
+
+
+load/store
+==================

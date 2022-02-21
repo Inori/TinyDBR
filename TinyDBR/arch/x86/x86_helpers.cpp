@@ -264,6 +264,28 @@ size_t GetExplicitMemoryOperandCount(const ZydisDecodedOperand* operands, size_t
 	return mem_operand_count;
 }
 
+const ZydisDecodedOperand* GetExplicitMemoryOperand(const ZydisDecodedOperand* operands, size_t count)
+{
+	const ZydisDecodedOperand* mem_operand = nullptr;
+	for (size_t i = 0; i != count; ++i)
+	{
+		auto& operand = operands[i];
+		if (operand.type != ZydisOperandType::ZYDIS_OPERAND_TYPE_MEMORY)
+		{
+			continue;
+		}
+
+		if (operand.visibility != ZydisOperandVisibility::ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
+		{
+			continue;
+		}
+
+		mem_operand = &operand;
+		break;
+	}
+	return mem_operand;
+}
+
 #if 0
 
 uint32_t Push(xed_state_t *dstate, ZYDIS_REGISTER_enum_t r, unsigned char *encoded, size_t encoded_size) {
