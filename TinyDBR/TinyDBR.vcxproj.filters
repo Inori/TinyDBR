@@ -39,7 +39,7 @@
     <ClCompile Include="windows\api_helper.cpp">
       <Filter>Source Files\windows</Filter>
     </ClCompile>
-    <ClCompile Include="arch\x86\x86_memory_controller.cpp">
+    <ClCompile Include="arch\x86\x86_memory_monitor.cpp">
       <Filter>Source Files\arch\x86</Filter>
     </ClCompile>
   </ItemGroup>
@@ -80,7 +80,7 @@
     <ClInclude Include="windows\api_helper.h">
       <Filter>Source Files\windows</Filter>
     </ClInclude>
-    <ClInclude Include="memory_controller.h">
+    <ClInclude Include="memory_monitor.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

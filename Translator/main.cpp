@@ -1,5 +1,5 @@
 #include "tinydbr.h"
-#include "memory_controller.h"
+#include "memory_monitor.h"
 
 #include <Windows.h>
 #include <filesystem>
@@ -48,7 +48,7 @@ void InitRewrite()
 		}
 
 		MonitorFlags flags = IgnoreCode | IgnoreStack | IgnoreRipRelative;
-		instrumenter       = std::make_unique<MemoryController>(flags);
+		instrumenter       = std::make_unique<MemoryMonitor>(flags);
 		//instrumenter = std::make_unique<TinyDBR>();
 
 		TargetModule main_module = {};

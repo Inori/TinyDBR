@@ -1,6 +1,14 @@
 #pragma once
 
 #include "tinydbr.h"
+#include <memory>
+
+
+namespace zasm
+{
+class Program;
+class Assembler;
+}  // namespace zasm
 
 enum MonitorFlag : uint64_t
 {
@@ -11,11 +19,11 @@ enum MonitorFlag : uint64_t
 
 typedef uint64_t MonitorFlags;
 
-class MemoryController : public TinyDBR
+class MemoryMonitor : public TinyDBR
 {
 public:
-	MemoryController(MonitorFlags flags);
-	virtual ~MemoryController();
+	MemoryMonitor(MonitorFlags flags);
+	virtual ~MemoryMonitor();
 
 protected:
 	InstructionResult InstrumentInstruction(
@@ -29,5 +37,15 @@ private:
 
 private:
 	MonitorFlags m_flags = 0;
+
+#ifndef ARM64
+
+	std::unique_ptr<zasm::Program>   zprogram;
+	std::unique_ptr<zasm::Assembler> zassembler;
+
+#else
+// TODO:
+// ARM support
+#endif
 };
 
