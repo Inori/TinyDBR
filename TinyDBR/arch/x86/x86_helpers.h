@@ -25,16 +25,22 @@ limitations under the License.
 ZyanU32       GetRegisterWidth(ZydisRegister reg);
 ZydisRegister GetFullSizeRegister(ZydisRegister reg, int child_ptr_size);
 ZydisRegister GetUnusedRegister(ZydisRegister used_register, int operand_width);
-ZydisRegister Get8BitRegister(ZydisRegister reg);
+ZydisRegister GetLow8BitRegister(ZydisRegister reg);
+ZydisRegister GetNBitRegister(ZydisRegister reg, size_t nbits);
+
 
 uint32_t Pushaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size);
 uint32_t Popaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size);
+uint32_t MovReg(ZydisMachineMode mmode, ZydisRegister dst, const ZydisDecodedOperand& src, 
+    unsigned char* encoded, size_t encoded_size);
 
 size_t GetExplicitMemoryOperandCount(
     const ZydisDecodedOperand* operands, size_t count);
 
 const ZydisDecodedOperand* GetExplicitMemoryOperand(
 	const ZydisDecodedOperand* operands, size_t count);
+
+
 
 #if 0
 uint32_t Push(xed_state_t* dstate, ZydisRegister r, unsigned char* encoded, size_t encoded_size);

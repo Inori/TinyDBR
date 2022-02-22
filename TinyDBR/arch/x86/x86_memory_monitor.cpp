@@ -40,6 +40,29 @@ uint8_t MemoryMonitor::BuildModRm(BYTE mod, BYTE reg, BYTE rm)
 	return modRm;
 }
 
+
+//mov rbx, [rcx + 0x40]
+//
+//-------------------------------
+//
+// pushaq
+// pushfq
+//
+// sub rsp, 20
+// and rsp, 0xFFFFFFFFFFFFFFF0
+// mov rcx, this
+// lea rdx, [rcx+0x40]
+// mov r8, 8
+// 
+// --mov r9, rbx--  # for memory write, add this 
+// 
+// mov rax, OnMemoryRead
+// call rax
+
+// popfq
+// popaq
+// mov rbx, [rcx + 0x40]
+
 size_t MemoryMonitor::GenerateModRm(
 	const Instruction& inst, std::array<uint8_t, TempCodeSize>& code_buffer)
 {
@@ -47,11 +70,22 @@ size_t MemoryMonitor::GenerateModRm(
 	uint8_t mov_rax[] = { 0x48, 0xB9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 	uint8_t lea_reg[] = { 0x8D, 0x00 };
 	uint8_t mov_r8d[] = { 0x41, 0xB8, 0x00, 0x00, 0x00, 0x00 };
+	uint8_t shadow_align_rsp[] = { 0x48, 0x83, 0xEC, 0x20, 0x48, 0x83, 0xE4, 0xF0 };
+	uint8_t call_rax[] = { 0xFF, 0xD0 };
 
 
 	const auto& zinst   = inst.zinst.instruction;
 	uint8_t*    inst_address = reinterpret_cast<uint8_t*>(inst.address);
 	size_t      cur_pos = 0;
+
+	// reserve the shadow space and align the stack with 16 bytes
+	// the original rsp value will be recovered when popaq
+	// so we don't need to restore rsp after call functions
+	
+	// sub rsp, 20
+	// and rsp, 0xFFFFFFFFFFFFFFF0
+	memcpy(&code_buffer[cur_pos], shadow_align_rsp, sizeof(shadow_align_rsp));
+	cur_pos += sizeof(shadow_align_rsp);
 
 	// mov rcx, this
 	*reinterpret_cast<uint64_t*>(&mov_rcx[2]) = reinterpret_cast<uint64_t>(this);
@@ -81,17 +115,6 @@ size_t MemoryMonitor::GenerateModRm(
 		cur_pos += disp_size;
 	}
 
-	assert(zinst.raw.imm[1].offset == 0);
-
-	// copy imm if exist
-	if (zinst.raw.imm[0].offset != 0)
-	{
-		ZyanU64 imm     = zinst.raw.imm[0].value.u;
-		DWORD   imm_size = zinst.raw.imm[0].size / 8;
-		memcpy(&code_buffer[cur_pos], &imm, imm_size);
-		cur_pos += imm_size;
-	}
-
 	// mov r8d, size
 	uint32_t mem_size                         = zinst.operand_width / 8;
 	*reinterpret_cast<uint32_t*>(&mov_r8d[2]) = reinterpret_cast<uint32_t>(mem_size);
@@ -118,16 +141,36 @@ size_t MemoryMonitor::GenerateModRm(
 	{
 		auto func = decltype(&MemoryMonitor::OnMemoryWrite)(&MemoryMonitor::OnMemoryWrite);
 		callback  = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(func));
+
+		// mov r9, value
+		if (zinst.operand_count_visible != 2)
+		{
+			FATAL("Not implemented.");
+		}
+
+		const auto& src_operand = inst.zinst.operands[1];
+		if (src_operand.type != ZYDIS_OPERAND_TYPE_REGISTER && 
+			src_operand.type != ZYDIS_OPERAND_TYPE_IMMEDIATE)
+		{
+			FATAL("Error operand type.");
+		}
+
+		uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+		size_t  encoded_length = sizeof(encoded_instruction);
+		encoded_length         = MovReg(inst.zinst.instruction.machine_mode,
+                                ZYDIS_REGISTER_R9, src_operand, encoded_instruction, encoded_length);
+		memcpy(&code_buffer[cur_pos], encoded_instruction, encoded_length);
+		cur_pos += encoded_length;
 	}
 
 	// mov rax, callback
-	// TODO: 
-	// shadow space, stack aligh
 	*reinterpret_cast<uint64_t*>(&mov_rax[2]) = reinterpret_cast<uint64_t>(callback);
 	memcpy(&code_buffer[cur_pos], mov_rax, sizeof(mov_rax));
 	cur_pos += sizeof(mov_rax);
-	// 
 
+	// call rax
+	memcpy(&code_buffer[cur_pos], call_rax, sizeof(call_rax));
+	cur_pos += sizeof(call_rax);
 
 	return cur_pos;
 }

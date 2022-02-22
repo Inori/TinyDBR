@@ -8,10 +8,14 @@ mov rbx, [rcx + 0x40]
 pushaq
 pushfq
 
+sub rsp, 20
+and rsp, 0xFFFFFFFFFFFFFFF0
 mov rcx, this
 lea rdx, [rcx+0x40]
 mov r8, 8
-call OnMemoryRead
+mov rax, OnMemoryRead
+
+call rax
 
 popfq
 popaq

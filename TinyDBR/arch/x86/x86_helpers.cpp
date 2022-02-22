@@ -66,62 +66,36 @@ ZyanU32 GetRegisterWidth(ZydisRegister reg)
 
 ZydisRegister GetFullSizeRegister(ZydisRegister reg, int child_ptr_size)
 {
-	ZydisRegister new_reg = ZYDIS_REGISTER_NONE;
-	ZyanU32       width  = GetRegisterWidth(reg);
-	
-	if (reg == ZYDIS_REGISTER_NONE)
-	{
-		width = 0;
-	}
-
-	switch (width)
-	{
-	case 32:
-		new_reg = reg;
-		break;
-	case 16:
-		new_reg = (ZydisRegister)((int)reg + 16);
-		break;
-	case 8:
-	{
-		if (reg >= ZYDIS_REGISTER_AL && reg <= ZYDIS_REGISTER_BL)
-		{
-			reg = (ZydisRegister)((int)reg + 4);
-		}
-		new_reg = (ZydisRegister)((int)reg + 32);
-	}
-	break;
-	default: // for 0 or 64
-		new_reg = reg;
-		break;
-	}
-
-	if (child_ptr_size == 8 && width != 64 && width != 0)
-	{
-		new_reg = (ZydisRegister)((int)new_reg + 16);
-	}
-	return new_reg;
+	return GetNBitRegister(reg, child_ptr_size * 8);
 }
 
-ZydisRegister Get8BitRegister(ZydisRegister reg)
+ZydisRegister GetLow8BitRegister(ZydisRegister reg)
 {
 	switch (reg)
 	{
+	case ZYDIS_REGISTER_AL:
+	case ZYDIS_REGISTER_AH:
 	case ZYDIS_REGISTER_AX:
 	case ZYDIS_REGISTER_EAX:
 	case ZYDIS_REGISTER_RAX:
 		return ZYDIS_REGISTER_AL;
 
+	case ZYDIS_REGISTER_CL:
+	case ZYDIS_REGISTER_CH:
 	case ZYDIS_REGISTER_CX:
 	case ZYDIS_REGISTER_ECX:
 	case ZYDIS_REGISTER_RCX:
 		return ZYDIS_REGISTER_CL;
 
+	case ZYDIS_REGISTER_DL:
+	case ZYDIS_REGISTER_DH:
 	case ZYDIS_REGISTER_DX:
 	case ZYDIS_REGISTER_EDX:
 	case ZYDIS_REGISTER_RDX:
 		return ZYDIS_REGISTER_DL;
 
+	case ZYDIS_REGISTER_BL:
+	case ZYDIS_REGISTER_BH:
 	case ZYDIS_REGISTER_BX:
 	case ZYDIS_REGISTER_EBX:
 	case ZYDIS_REGISTER_RBX:
@@ -193,13 +167,48 @@ ZydisRegister Get8BitRegister(ZydisRegister reg)
 }
 
 
+ZydisRegister GetNBitRegister(ZydisRegister reg, size_t nbits)
+{
+	ZydisRegister xl = GetLow8BitRegister(reg);
+
+	if (nbits == 8)
+	{
+		return xl;
+	}
+
+	ZydisRegister result = ZYDIS_REGISTER_NONE;
+
+	static_assert(ZYDIS_REGISTER_AH - ZYDIS_REGISTER_AL == 4, "Register definition changed.");
+	if (xl >= ZYDIS_REGISTER_AL && xl <= ZYDIS_REGISTER_BL)
+	{
+		xl = static_cast<ZydisRegister>(static_cast<uint32_t>(xl) + 4);
+	}
+
+	switch (nbits)
+	{
+	case 16:
+		result = static_cast<ZydisRegister>(static_cast<uint32_t>(xl) + 16);
+		break;
+	case 32:
+		result = static_cast<ZydisRegister>(static_cast<uint32_t>(xl) + 16 * 2);
+		break;
+	case 64:
+		result = static_cast<ZydisRegister>(static_cast<uint32_t>(xl) + 16 * 3);
+		break;
+	default:
+		FATAL("Error register size.");
+		break;
+	}
+	return result;
+}
+
 uint32_t Pushaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size)
 {
 	uint32_t olen = 0;
 	if (mmode == ZYDIS_MACHINE_MODE_LONG_64)
 	{
 		// push all general registers, except rsp
-		uint8_t pushad[] = { 0x50, 0x51, 0x52, 0x53, 0x55, 0x56, 0x57, 0x41, 0x50, 0x41, 0x51,
+		uint8_t pushad[] = { 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x41, 0x50, 0x41, 0x51,
 			0x41, 0x52, 0x41, 0x53, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57 };
 		if (encoded_size < sizeof(pushad))
 		{
@@ -224,7 +233,7 @@ uint32_t Popaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_si
 	if (mmode == ZYDIS_MACHINE_MODE_LONG_64)
 	{
 		uint8_t popad[] = { 0x41, 0x5F, 0x41, 0x5E, 0x41, 0x5D, 0x41, 0x5C, 0x41, 0x5B, 0x41, 
-			0x5A, 0x41, 0x59, 0x41, 0x58, 0x5F, 0x5E, 0x5D, 0x5B, 0x5A, 0x59, 0x58 };
+			0x5A, 0x41, 0x59, 0x41, 0x58, 0x5F, 0x5E, 0x5D, 0x5C, 0x5B, 0x5A, 0x59, 0x58 };
 		if (encoded_size < sizeof(popad))
 		{
 			olen = 0;
@@ -242,6 +251,29 @@ uint32_t Popaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_si
 	return olen;
 }
 
+
+uint32_t MovReg(ZydisMachineMode mmode, ZydisRegister dst, const ZydisDecodedOperand& src, 
+	unsigned char* encoded, size_t encoded_size)
+{
+	ZydisEncoderRequest req;
+	memset(&req, 0, sizeof(req));
+
+	req.machine_mode          = mmode;
+	req.mnemonic              = ZYDIS_MNEMONIC_MOV;
+	req.operand_count         = 2;
+	req.operands[0].type      = ZYDIS_OPERAND_TYPE_REGISTER;
+	req.operands[0].reg.value = GetNBitRegister(dst, src.size);
+
+	req.operands[1].type      = src.type;
+	req.operands[1].reg.value = src.reg.value;
+	req.operands[1].imm.u     = src.imm.value.u;
+
+	if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(&req, encoded, &encoded_size)))
+	{
+		FATAL("Failed to encode instruction");
+	}
+	return encoded_size;
+}
 
 size_t GetExplicitMemoryOperandCount(const ZydisDecodedOperand* operands, size_t count)
 {
