@@ -29,6 +29,9 @@ mov [rcx + 0x40], rbx
 pushaq
 pushfq
 
+sub rsp, 20
+and rsp, 0xFFFFFFFFFFFFFFF0
+
 mov rcx, this
 lea rdx, [rcx + 0x40]
 mov r8, 8
@@ -40,9 +43,35 @@ popaq
 mov [rcx + 0x40], rbx
 
 
-movs
-==================
 
 
-load/store
+
+rep movsd
 ==================
+pushaq
+pushfq
+sub rsp, 20
+and rsp, 0xFFFFFFFFFFFFFFF0
+
+shl rcx, 2
+mov r9, rcx
+mov rcx, this
+
+pushfq
+pop rax
+bt rax, 0x0A
+jnc label # if CF=0
+
+sub rdi, r9
+sub rsi, r9
+
+label:
+
+mov rdx, rdi
+mov r8, rsi
+mov rax, OnStringMov
+call rax
+
+popfq
+popaq
+rep movsb
