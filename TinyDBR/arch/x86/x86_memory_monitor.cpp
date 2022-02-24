@@ -175,9 +175,137 @@ size_t MemoryMonitor::GenerateModRm(
 	return cur_pos;
 }
 
+// rep movsd
+// ==================
+// pushaq
+// pushfq
+// sub rsp, 20
+// and rsp, 0xFFFFFFFFFFFFFFF0
+//
+// shl rcx, 2          # 1 for w, 2 for d, 3 for q
+// mov r9, rcx
+// mov rcx, this
+//
+// pushfq
+// pop rax
+// bt rax, 0x0A        # DF
+// jnc label           # if CF=0
+//
+// sub rdi, r9
+// sub rsi, r9
+//
+// label:
+//
+// mov rdx, rdi
+// mov r8, rsi
+// mov rax, OnStringMov
+// call rax
+//
+// popfq
+// popaq
+// rep movsd
 size_t MemoryMonitor::GenerateString(
 	const Instruction& inst, std::array<uint8_t, TempCodeSize>& code_buffer)
 {
+	uint8_t mov_rcx[]                = { 0x48, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	uint8_t mov_r9d[]                = { 0x41, 0xB9, 0x00, 0x00, 0x00, 0x00 };
+	uint8_t shl_rcx[]                = { 0x48, 0xC1, 0xE1, 0x00 };
+	uint8_t mov_r9_rcx[]             = { 0x4C, 0x8B, 0xC9 };
+	uint8_t pushfq_pop_rax[]         = { 0x9C, 0x58 };
+	uint8_t bt_rax_0A[]              = { 0x48, 0x0F, 0xBA, 0xE0, 0x0A };
+	uint8_t jnc[]                    = { 0x73, 0x06 };
+	uint8_t sub_rdi_r9_sub_rsi_r9[]  = { 0x49, 0x2B, 0xF9, 0x49, 0x2B, 0xF1 };
+	uint8_t mov_rdx_rdi_mov_r8_rsi[] = { 0x49, 0x2B, 0xF9, 0x49, 0x2B, 0xF1 };
+	uint8_t shadow_align_rsp[]       = { 0x48, 0x83, 0xEC, 0x20, 0x48, 0x83, 0xE4, 0xF0 };
+	uint8_t mov_rax[]                = { 0x48, 0xB9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	uint8_t call_rax[]               = { 0xFF, 0xD0 };
+
+	const auto& zinst        = inst.zinst.instruction;
+	uint8_t*    inst_address = reinterpret_cast<uint8_t*>(inst.address);
+	size_t      cur_pos      = 0;
+
+	// In 64-bit mode, if 67H is used to override address size attribute,
+	// the count register is ECX and any implicit source/destination operand will
+	// use the corresponding 32-bit index register.
+	if (zinst.raw.prefix_count == 2 && zinst.raw.prefixes[1].value == 0x67)
+	{
+		FATAL("Not support 32-bit string instruction yet.");
+	}
+
+	// reserve the shadow space and align the stack with 16 bytes
+	// sub rsp, 20
+	// and rsp, 0xFFFFFFFFFFFFFFF0
+	memcpy(&code_buffer[cur_pos], shadow_align_rsp, sizeof(shadow_align_rsp));
+	cur_pos += sizeof(shadow_align_rsp);
+
+	// in bytes
+	uint8_t operand_size = zinst.operand_width / 8;
+	if (zinst.attributes & ZYDIS_ATTRIB_HAS_REP)
+	{
+		if (operand_size != 1)
+		{
+			// shl rcx, n
+			const uint8_t shift_table[] = { 0, 0, 1, 0, 2, 0, 0, 0, 3 };
+			shl_rcx[3]                  = shift_table[operand_size];
+			memcpy(&code_buffer[cur_pos], shl_rcx, sizeof(shl_rcx));
+			cur_pos += sizeof(shl_rcx);
+		}
+
+		// mov r9, rcx
+		memcpy(&code_buffer[cur_pos], mov_r9_rcx, sizeof(mov_r9_rcx));
+		cur_pos += sizeof(mov_r9_rcx);
+	}
+	else
+	{
+		// mov r9d, operand_size
+		*reinterpret_cast<uint32_t*>(&mov_r9d[1]) = static_cast<uint32_t>(operand_size);
+		memcpy(&code_buffer[cur_pos], mov_r9d, sizeof(mov_r9d));
+		cur_pos += sizeof(mov_r9d);
+	}
+
+
+	// mov rcx, this
+	*reinterpret_cast<uint64_t*>(&mov_rcx[2]) = reinterpret_cast<uint64_t>(this);
+	memcpy(&code_buffer[cur_pos], mov_rcx, sizeof(mov_rcx));
+	cur_pos += sizeof(mov_rcx);
+
+	// pushfq
+	// pop rax
+	memcpy(&code_buffer[cur_pos], pushfq_pop_rax, sizeof(pushfq_pop_rax));
+	cur_pos += sizeof(pushfq_pop_rax);
+
+	// bt rax, 0x0A
+	memcpy(&code_buffer[cur_pos], bt_rax_0A, sizeof(bt_rax_0A));
+	cur_pos += sizeof(bt_rax_0A);
+
+	// jnc label_positive
+	memcpy(&code_buffer[cur_pos], jnc, sizeof(jnc));
+	cur_pos += sizeof(jnc);
+
+	// sub rdi, r9
+	// sub rsi, r9
+	memcpy(&code_buffer[cur_pos], sub_rdi_r9_sub_rsi_r9, sizeof(sub_rdi_r9_sub_rsi_r9));
+	cur_pos += sizeof(sub_rdi_r9_sub_rsi_r9);
+
+	// label_positive:
+	// mov rdx, rdi
+	// mov r8, rsi
+	memcpy(&code_buffer[cur_pos], mov_rdx_rdi_mov_r8_rsi, sizeof(mov_rdx_rdi_mov_r8_rsi));
+	cur_pos += sizeof(mov_rdx_rdi_mov_r8_rsi);
+
+	auto     func     = decltype(&MemoryMonitor::OnStringMov)(&MemoryMonitor::OnStringMov);
+	uint64_t callback = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(func));
+
+	// mov rax, callback
+	*reinterpret_cast<uint64_t*>(&mov_rax[2]) = reinterpret_cast<uint64_t>(callback);
+	memcpy(&code_buffer[cur_pos], mov_rax, sizeof(mov_rax));
+	cur_pos += sizeof(mov_rax);
+
+	// call rax
+	memcpy(&code_buffer[cur_pos], call_rax, sizeof(call_rax));
+	cur_pos += sizeof(call_rax);
+
+	return cur_pos;
 }
 
 

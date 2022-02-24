@@ -53,14 +53,14 @@ pushfq
 sub rsp, 20
 and rsp, 0xFFFFFFFFFFFFFFF0
 
-shl rcx, 2
+shl rcx, 2          # 1 for w, 2 for d, 3 for q
 mov r9, rcx
 mov rcx, this
 
 pushfq
 pop rax
-bt rax, 0x0A
-jnc label # if CF=0
+bt rax, 0x0A     # DF
+jnc label           # if CF=0
 
 sub rdi, r9
 sub rsi, r9
@@ -74,4 +74,4 @@ call rax
 
 popfq
 popaq
-rep movsb
+rep movsd
