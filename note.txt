@@ -5,8 +5,9 @@ mov rbx, [rcx + 0x40]
 
 -------------------------------
 
-pushaq
 pushfq
+pushaq
+mov rbp, rsp
 
 sub rsp, 20
 and rsp, 0xFFFFFFFFFFFFFFF0
@@ -17,8 +18,9 @@ mov rax, OnMemoryRead
 
 call rax
 
-popfq
+mov rsp, rbp
 popaq
+popfq
 mov rbx, [rcx + 0x40]
 
 -------------------------------
@@ -26,8 +28,9 @@ mov rbx, [rcx + 0x40]
 
 mov [rcx + 0x40], rbx
 
-pushaq
 pushfq
+pushaq
+mov rbp, rsp
 
 sub rsp, 20
 and rsp, 0xFFFFFFFFFFFFFFF0
@@ -38,8 +41,9 @@ mov r8, 8
 mov r9, rbx
 call OnMemoryWrite
 
-popfq
+mov rsp, rbp
 popaq
+popfq
 mov [rcx + 0x40], rbx
 
 
@@ -48,8 +52,10 @@ mov [rcx + 0x40], rbx
 
 rep movsd
 ==================
-pushaq
 pushfq
+pushaq
+mov rbp, rsp
+
 sub rsp, 20
 and rsp, 0xFFFFFFFFFFFFFFF0
 
@@ -72,6 +78,7 @@ mov r8, rsi
 mov rax, OnStringMov
 call rax
 
-popfq
+mov rsp, rbp
 popaq
+popfq
 rep movsd

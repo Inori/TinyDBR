@@ -2,6 +2,11 @@
 #include "x86_helpers.h"
 
 
+static const uint8_t shadow_align_rsp[] = { 0x48, 0x83, 0xEC, 0x20, 0x48, 0x83, 0xE4, 0xF0 };
+static const uint8_t call_rax[]         = { 0xFF, 0xD0 };
+static const uint8_t mov_rbp_rsp[]      = { 0x48, 0x89, 0xE5 };
+static const uint8_t mov_rsp_rbp[]      = { 0x48, 0x89, 0xEC };
+
 
 MemoryMonitor::MemoryMonitor(MonitorFlags flags):
 	m_flags(flags)
@@ -44,9 +49,9 @@ uint8_t MemoryMonitor::BuildModRm(BYTE mod, BYTE reg, BYTE rm)
 //mov rbx, [rcx + 0x40]
 //
 //-------------------------------
-//
-// pushaq
+// 
 // pushfq
+// pushaq
 //
 // sub rsp, 20
 // and rsp, 0xFFFFFFFFFFFFFFF0
@@ -58,20 +63,18 @@ uint8_t MemoryMonitor::BuildModRm(BYTE mod, BYTE reg, BYTE rm)
 // 
 // mov rax, OnMemoryRead
 // call rax
-
-// popfq
+// 
 // popaq
+// popfq
 // mov rbx, [rcx + 0x40]
 
 size_t MemoryMonitor::GenerateModRm(
 	const Instruction& inst, std::array<uint8_t, TempCodeSize>& code_buffer)
 {
-	uint8_t mov_rcx[] = { 0x48, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-	uint8_t mov_rax[] = { 0x48, 0xB9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-	uint8_t lea_reg[] = { 0x8D, 0x00 };
-	uint8_t mov_r8d[] = { 0x41, 0xB8, 0x00, 0x00, 0x00, 0x00 };
-	uint8_t shadow_align_rsp[] = { 0x48, 0x83, 0xEC, 0x20, 0x48, 0x83, 0xE4, 0xF0 };
-	uint8_t call_rax[] = { 0xFF, 0xD0 };
+	uint8_t mov_rax[]          = { 0x48, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	uint8_t mov_rcx[]          = { 0x48, 0xB9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	uint8_t lea_reg[]          = { 0x8D, 0x00 };
+	uint8_t mov_r8d[]          = { 0x41, 0xB8, 0x00, 0x00, 0x00, 0x00 };
 
 
 	const auto& zinst   = inst.zinst.instruction;
@@ -177,8 +180,8 @@ size_t MemoryMonitor::GenerateModRm(
 
 // rep movsd
 // ==================
-// pushaq
 // pushfq
+// pushaq
 // sub rsp, 20
 // and rsp, 0xFFFFFFFFFFFFFFF0
 //
@@ -201,8 +204,8 @@ size_t MemoryMonitor::GenerateModRm(
 // mov rax, OnStringMov
 // call rax
 //
-// popfq
 // popaq
+// popfq
 // rep movsd
 size_t MemoryMonitor::GenerateString(
 	const Instruction& inst, std::array<uint8_t, TempCodeSize>& code_buffer)
@@ -216,9 +219,7 @@ size_t MemoryMonitor::GenerateString(
 	uint8_t jnc[]                    = { 0x73, 0x06 };
 	uint8_t sub_rdi_r9_sub_rsi_r9[]  = { 0x49, 0x2B, 0xF9, 0x49, 0x2B, 0xF1 };
 	uint8_t mov_rdx_rdi_mov_r8_rsi[] = { 0x49, 0x2B, 0xF9, 0x49, 0x2B, 0xF1 };
-	uint8_t shadow_align_rsp[]       = { 0x48, 0x83, 0xEC, 0x20, 0x48, 0x83, 0xE4, 0xF0 };
 	uint8_t mov_rax[]                = { 0x48, 0xB9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-	uint8_t call_rax[]               = { 0xFF, 0xD0 };
 
 	const auto& zinst        = inst.zinst.instruction;
 	uint8_t*    inst_address = reinterpret_cast<uint8_t*>(inst.address);
@@ -229,7 +230,16 @@ size_t MemoryMonitor::GenerateString(
 	// use the corresponding 32-bit index register.
 	if (zinst.raw.prefix_count == 2 && zinst.raw.prefixes[1].value == 0x67)
 	{
+		// unlikely case
 		FATAL("Not support 32-bit string instruction yet.");
+	}
+
+	if (zinst.mnemonic != ZYDIS_MNEMONIC_MOVSB &&
+		zinst.mnemonic != ZYDIS_MNEMONIC_MOVSW &&
+		zinst.mnemonic != ZYDIS_MNEMONIC_MOVSD &&
+		zinst.mnemonic != ZYDIS_MNEMONIC_MOVSQ)
+	{
+		FATAL("Not supported yet.");
 	}
 
 	// reserve the shadow space and align the stack with 16 bytes
@@ -352,23 +362,34 @@ InstructionResult MemoryMonitor::InstrumentInstruction(
 		// TODO:
 		// we may need to save/restore xmm registers also.
 		
+		// pushfq
+		WriteCode(module, pushfq, sizeof(pushfq));
 		// pushaq
 		size_t  encoded_length          = Pushaq(
 			ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
 		WriteCode(module, encoded_instruction, encoded_length);
-		// pushfq
-		WriteCode(module, pushfq, sizeof(pushfq));
 
-		std::array<uint8_t, TempCodeSize> code_buffer;
+		// we use rbp to save rsp value
+		// this is safe because both Windows x64 ABI and SystemV x64 ABI 
+		// guarantees rbp must be saved and restored by a function that uses them
+		
+		// mov rbp, rsp
+		WriteCode(module, (void*)mov_rbp_rsp, sizeof(mov_rbp_rsp));
+
+		// generate call
+		std::array<uint8_t, TempCodeSize> code_buffer = {};
 		size_t                            code_size = GenerateMemoryCallback(inst, code_buffer);
 		WriteCode(module, code_buffer.data(), code_size);
 
-		// popfq
-		WriteCode(module, popfq, sizeof(popfq));
+		// mov rsp, rbp
+		WriteCode(module, (void*)mov_rsp_rbp, sizeof(mov_rsp_rbp));
 		// popaq
 		encoded_length = Popaq(
 			ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
 		WriteCode(module, encoded_instruction, encoded_length);
+		// popfq
+		WriteCode(module, popfq, sizeof(popfq));
+
 
 		// return INST_NOTHANDLED which causes
 		// the original instruction to be appended
@@ -419,8 +440,12 @@ bool MemoryMonitor::NeedToHandle(Instruction& inst)
 		{
 			break;
 		}
-		// TODO:
-		// filter gs and fs memory access.
+	
+		auto operand = GetExplicitMemoryOperand(zinst.operands, zinst.instruction.operand_count_visible);
+		if (operand->mem.segment == ZYDIS_REGISTER_GS || operand->mem.segment == ZYDIS_REGISTER_FS)
+		{
+			break;
+		}
 
 		need_handle  = true;
 	}while(false);
