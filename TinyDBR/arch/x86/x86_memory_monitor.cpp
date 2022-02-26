@@ -111,18 +111,8 @@ void X86MemoryMonitor::GenerateModRmWriteValue2Operands(const Instruction& inst,
 		size_t byte_size = src_operand.size / 8;
 		if (byte_size > 8)
 		{
-			size_t stack_offset = 0x20 + byte_size;
-			size_t align_value  = ~(byte_size - 1);
-
-			// save current buffer position
-			size_t old_position = a.getSize();
-			// fix stack offset and alignment at start buffer begin.
-			a.setSize(rsp_position);
-
-			a.sub(rsp, stack_offset);
-			a.and_(rsp, align_value);
-			// recover buffer position
-			a.setSize(old_position);
+			size_t stack_offset = ShadowSpaceSize + byte_size;
+			AllocAlignStack(a, rsp_position, stack_offset, byte_size);
 
 			// vmovdqa [rsp], x/y/zmm
 			encoded_length = MovStackAVX(inst.zinst.instruction.machine_mode,
@@ -187,6 +177,33 @@ void X86MemoryMonitor::GenerateModRmWriteValue3Operands(
 		assembler_->PrintInstruction(inst);
 		WARN("Not supported instruction.");
 	}
+}
+
+void X86MemoryMonitor::AllocAlignStack(Xbyak::CodeGenerator& a,
+									   size_t                rsp_position,
+									   size_t                size,
+									   size_t                alignment)
+{
+	using namespace Xbyak::util;
+
+	size_t align_value = ~(alignment - 1);
+	// save current buffer position
+	size_t old_position = a.getSize();
+	// fix stack offset and alignment at rsp_position.
+	a.setSize(rsp_position);
+
+	a.sub(rsp, size);
+	a.and_(rsp, align_value);
+
+	// note:
+	// the size of following 'sub' together 'and' instruction
+	// must be equal to the old instruction,
+	// or there will be instructions overwritten.
+	size_t new_size = a.getSize() - rsp_position;
+	assert(new_size == 8);
+
+	// recover buffer position
+	a.setSize(old_position);
 }
 
 void X86MemoryMonitor::GenerateModRmWriteValue(

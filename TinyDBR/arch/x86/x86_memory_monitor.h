@@ -20,7 +20,8 @@ private:
 	};
 
 	// temp code size to generate instruction to call callbacks
-	constexpr static size_t TempCodeSize = 512;
+	constexpr static size_t TempCodeSize    = 0x200;
+	constexpr static size_t ShadowSpaceSize = 0x20;
 
 public:
 	X86MemoryMonitor(MonitorFlags flags);
@@ -65,6 +66,11 @@ private:
 		const Instruction&    inst,
 		Xbyak::CodeGenerator& a,
 		size_t                rsp_position);
+
+	void AllocAlignStack(Xbyak::CodeGenerator& a,
+						 size_t                rsp_position,
+						 size_t                size,
+						 size_t                alignment);
 
 private:
 	std::array<uint8_t, TempCodeSize>     code_buffer;
