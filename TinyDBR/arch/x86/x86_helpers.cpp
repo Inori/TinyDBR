@@ -360,6 +360,37 @@ uint32_t MovStackAVX(ZydisMachineMode mmode, size_t stack_offset, const ZydisDec
 	return encoded_size;
 }
 
+uint32_t LeaReg(ZydisMachineMode mmode, ZydisRegister dst, const ZydisDecodedOperand& src, 
+	size_t address_width, unsigned char* encoded, size_t encoded_size)
+{
+	if (src.type != ZYDIS_OPERAND_TYPE_MEMORY)
+	{
+		FATAL("lea src operand is not memory.");
+	}
+
+	ZydisEncoderRequest req;
+	memset(&req, 0, sizeof(req));
+
+	req.machine_mode          = mmode;
+	req.mnemonic              = ZYDIS_MNEMONIC_LEA;
+	req.operand_count         = 2;
+	req.operands[0].type      = ZYDIS_OPERAND_TYPE_REGISTER;
+	req.operands[0].reg.value = dst;
+
+	req.operands[1].type             = src.type;
+	req.operands[1].mem.base         = src.mem.base;
+	req.operands[1].mem.index        = src.mem.index;
+	req.operands[1].mem.scale        = src.mem.scale;
+	req.operands[1].mem.displacement = src.mem.disp.value;
+	req.operands[1].mem.size         = address_width / 8;
+
+	if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(&req, encoded, &encoded_size)))
+	{
+		FATAL("Failed to encode instruction");
+	}
+	return encoded_size;
+}
+
 size_t GetExplicitMemoryOperandCount(const ZydisDecodedOperand* operands, size_t count)
 {
 	size_t mem_operand_count = 0;

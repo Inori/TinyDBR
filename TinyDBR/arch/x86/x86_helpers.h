@@ -37,6 +37,8 @@ uint32_t MovRegAVX(ZydisMachineMode mmode, ZydisRegister dst, const ZydisDecoded
     unsigned char* encoded, size_t encoded_size);
 uint32_t MovStackAVX(ZydisMachineMode mmode, size_t stack_offset, const ZydisDecodedOperand& src, 
     unsigned char* encoded, size_t encoded_size);
+uint32_t LeaReg(ZydisMachineMode mmode, ZydisRegister dst, const ZydisDecodedOperand& src, 
+    size_t address_width, unsigned char* encoded, size_t encoded_size);
 
 size_t GetExplicitMemoryOperandCount(
     const ZydisDecodedOperand* operands, size_t count);

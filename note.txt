@@ -1,42 +1,24 @@
 
 ModRM 
 ==================
-mov rbx, [rcx + 0x40]
-
--------------------------------
-
-pushfq
-pushaq
-mov rbp, rsp
-
-sub rsp, 0x20
-and rsp, 0xFFFFFFFFFFFFFFF0
-mov rcx, this
-lea rdx, [rcx+0x40]
-mov r8, 8
-mov rax, OnMemoryRead
-
-call rax
-
-mov rsp, rbp
-popaq
-popfq
-mov rbx, [rcx + 0x40]
-
--------------------------------
 
 
 mov [rcx + 0x40], rbx
 
 pushfq
 pushaq
+lea rdx, [rcx + 0x40]
+
+# we use rbp to save rsp value
+# this is safe because both Windows x64 ABI and SystemV x64 ABI 
+# guarantees rbp must be saved and restored by a function that uses them
 mov rbp, rsp
 
 sub rsp, 0x20
 and rsp, 0xFFFFFFFFFFFFFFF0
 
 mov rcx, this
-lea rdx, [rcx + 0x40]
+
 mov r8, 8
 mov r9, rbx
 call OnMemoryWrite
@@ -44,7 +26,10 @@ call OnMemoryWrite
 mov rsp, rbp
 popaq
 popfq
+
 mov [rcx + 0x40], rbx
+
+
 
 
 
