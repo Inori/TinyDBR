@@ -32,19 +32,47 @@ X86MemoryMonitor::InstructionType X86MemoryMonitor::GetInstructionType(const Ins
 	return type;
 }
 
-void X86MemoryMonitor::GenerateModRmWriteValue(
-	const Instruction&    inst,
-	Xbyak::CodeGenerator& a,
-	size_t                rsp_position)
+void X86MemoryMonitor::GenerateModRmWriteValue1Operand(const Instruction& inst, 
+	Xbyak::CodeGenerator& a, size_t rsp_position)
 {
 	using namespace Xbyak::util;
 
-	const auto& zinst = inst.zinst.instruction;
-
-	if (zinst.operand_count_visible != 2)
+	const auto& zinst = inst.zinst;
+	if (IsSetCCInstruction(zinst.instruction.mnemonic))
 	{
-		FATAL("Not implemented.");
+		ZydisEncoderRequest req = {};
+		if (ZYAN_FAILED(ZydisEncoderDecodedInstructionToEncoderRequest(
+			&zinst.instruction, 
+			zinst.operands, zinst.instruction.operand_count_visible, 
+			&req)))
+		{
+			FATAL("Convert instruction request failed.");
+		}
+
+		req.operands[0].type = ZYDIS_OPERAND_TYPE_REGISTER;
+		req.operands[0].reg.value = ZYDIS_REGISTER_R9B;
+
+		ZyanU8    encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+		ZyanUSize encoded_length = sizeof(encoded_instruction);
+		if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(
+			&req, encoded_instruction, &encoded_length)))
+		{
+			FATAL("Encode instruction failed.");
+		}
+		a.db(encoded_instruction, encoded_length);
 	}
+	else
+	{
+		assembler_->PrintInstruction(inst);
+		// FATAL("Not supported instruction.");
+		WARN("Not supported instruction.");
+	}
+}
+
+void X86MemoryMonitor::GenerateModRmWriteValue2Operands(const Instruction& inst, 
+	Xbyak::CodeGenerator& a, size_t rsp_position)
+{
+	using namespace Xbyak::util;
 
 	const auto& src_operand = inst.zinst.operands[1];
 	if (src_operand.type != ZYDIS_OPERAND_TYPE_REGISTER &&
@@ -57,13 +85,24 @@ void X86MemoryMonitor::GenerateModRmWriteValue(
 				  IsGeneralPurposeRegister(src_operand.reg.value);
 	bool is_imm = src_operand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE;
 
-	uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+	uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH * 2];
 	size_t  encoded_length = sizeof(encoded_instruction);
 	if (is_gpr || is_imm)
 	{
+		auto src_op = src_operand;
+		if (is_gpr && IsHigh8BitRegister(src_operand.reg.value))
+		{
+			// since we can't mov ah/ch/dh/bh to r9b directly,
+			// we mov it to it's lower 8 bit register accordingly
+			auto src_reg = src_operand.reg.value;
+			auto dst_reg = GetLow8BitRegister(src_reg);
+			a.mov(ZydisRegToXbyakReg(dst_reg), ZydisRegToXbyakReg(src_reg));
+			// then update source operand's register
+			src_op.reg.value = dst_reg;
+		}
 		// mov r9, value
 		encoded_length = MovReg(inst.zinst.instruction.machine_mode,
-								ZYDIS_REGISTER_R9, src_operand, encoded_instruction, encoded_length);
+								ZYDIS_REGISTER_R9, src_op, encoded_instruction, encoded_length);
 		a.db(encoded_instruction, encoded_length);
 	}
 	else
@@ -74,7 +113,7 @@ void X86MemoryMonitor::GenerateModRmWriteValue(
 		{
 			size_t stack_offset = 0x20 + byte_size;
 			size_t align_value  = ~(byte_size - 1);
-		
+
 			// save current buffer position
 			size_t old_position = a.getSize();
 			// fix stack offset and alignment at start buffer begin.
@@ -90,7 +129,7 @@ void X86MemoryMonitor::GenerateModRmWriteValue(
 										 0, src_operand, encoded_instruction, encoded_length);
 			a.db(encoded_instruction, encoded_length);
 
-			a.lea(r9, ptr[rsp]);
+			a.lea(r9, ptr [rsp]);
 		}
 		else
 		{
@@ -99,9 +138,80 @@ void X86MemoryMonitor::GenerateModRmWriteValue(
 
 			// movd/movq r9, xmmN
 			encoded_length = MovRegAVX(inst.zinst.instruction.machine_mode,
-									ZYDIS_REGISTER_R9, src_operand, encoded_instruction, encoded_length);
+									   ZYDIS_REGISTER_R9, src_operand, encoded_instruction, encoded_length);
 			a.db(encoded_instruction, encoded_length);
 		}
+	}
+}
+
+void X86MemoryMonitor::GenerateModRmWriteValue3Operands(
+	const Instruction& inst, Xbyak::CodeGenerator& a, size_t rsp_position)
+{
+	using namespace Xbyak::util;
+
+	const auto& zinst    = inst.zinst;
+	auto        category = zinst.instruction.meta.category;
+
+	if (category == ZYDIS_CATEGORY_SSE ||
+		(category >= ZYDIS_CATEGORY_AVX && category <= ZYDIS_CATEGORY_AVX512_VP2INTERSECT))
+	{
+		ZydisEncoderRequest req = {};
+		if (ZYAN_FAILED(ZydisEncoderDecodedInstructionToEncoderRequest(
+				&zinst.instruction,
+				zinst.operands, zinst.instruction.operand_count_visible,
+				&req)))
+		{
+			FATAL("Convert instruction request failed.");
+		}
+
+		const auto& dst_operand = inst.zinst.operands[0];
+		if (dst_operand.type != ZYDIS_OPERAND_TYPE_MEMORY)
+		{
+			FATAL("Operand type is not memory.");
+		}
+
+		req.operands[0].type      = ZYDIS_OPERAND_TYPE_REGISTER;
+		req.operands[0].reg.value = GetNBitRegister(ZYDIS_REGISTER_R9, dst_operand.size);
+
+		ZyanU8    encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+		ZyanUSize encoded_length = sizeof(encoded_instruction);
+		if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(
+				&req, encoded_instruction, &encoded_length)))
+		{
+			FATAL("Encode instruction failed.");
+		}
+		a.db(encoded_instruction, encoded_length);
+	}
+	else
+	{
+		assembler_->PrintInstruction(inst);
+		WARN("Not supported instruction.");
+	}
+}
+
+void X86MemoryMonitor::GenerateModRmWriteValue(
+	const Instruction&    inst,
+	Xbyak::CodeGenerator& a,
+	size_t                rsp_position)
+{
+
+	const auto& zinst = inst.zinst.instruction;
+	switch (zinst.operand_count_visible)
+	{
+	case 1:
+		GenerateModRmWriteValue1Operand(inst, a, rsp_position);
+		break;
+	case 2:
+		GenerateModRmWriteValue2Operands(inst, a, rsp_position);
+		break;
+	case 3:
+		GenerateModRmWriteValue3Operands(inst, a, rsp_position);
+		break;
+	default:
+		assembler_->PrintInstruction(inst);
+		//FATAL("Operand count %d is not supported.", zinst.operand_count_visible);
+		WARN("Operand count %d is not supported.", zinst.operand_count_visible);
+		break;
 	}
 }
 
@@ -163,18 +273,18 @@ void X86MemoryMonitor::GenerateModRm(const Instruction& inst, Xbyak::CodeGenerat
 	// mov rcx, this
 	a.mov(rcx, reinterpret_cast<uint64_t>(this));
 
-	if ((operand->actions & ZYDIS_OPERAND_ACTION_CONDREAD) ||
-		(operand->actions & ZYDIS_OPERAND_ACTION_CONDWRITE))
-	{
-		assembler_->PrintInstruction(inst);
-		FATAL("Not implemented.");
-	}
-
-	//if ((operand->actions & ZYDIS_OPERAND_ACTION_CONDREAD))
+	//if ((operand->actions & ZYDIS_OPERAND_ACTION_CONDREAD) ||
+	//	(operand->actions & ZYDIS_OPERAND_ACTION_CONDWRITE))
 	//{
 	//	assembler_->PrintInstruction(inst);
 	//	FATAL("Not implemented.");
 	//}
+
+	if ((operand->actions & ZYDIS_OPERAND_ACTION_CONDREAD))
+	{
+		assembler_->PrintInstruction(inst);
+		FATAL("Not implemented.");
+	}
 
 	// mov r8d, size
 	uint32_t mem_size = operand->size / 8;

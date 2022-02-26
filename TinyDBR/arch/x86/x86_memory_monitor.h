@@ -53,6 +53,18 @@ private:
 		const Instruction&    inst,
 		Xbyak::CodeGenerator& a,
 		size_t                rsp_position);
+	void GenerateModRmWriteValue1Operand(
+		const Instruction&    inst,
+		Xbyak::CodeGenerator& a,
+		size_t                rsp_position);
+	void GenerateModRmWriteValue2Operands(
+		const Instruction&    inst,
+		Xbyak::CodeGenerator& a,
+		size_t                rsp_position);
+	void GenerateModRmWriteValue3Operands(
+		const Instruction&    inst,
+		Xbyak::CodeGenerator& a,
+		size_t                rsp_position);
 
 private:
 	std::array<uint8_t, TempCodeSize>     code_buffer;

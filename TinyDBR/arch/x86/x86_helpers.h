@@ -18,7 +18,7 @@ limitations under the License.
 #define ARCH_X86_X86_HELPERS_H
 
 #include <Zydis/Zydis.h>
-
+#include <xbyak.h>
 
 
 
@@ -28,6 +28,10 @@ ZydisRegister GetUnusedRegister(ZydisRegister used_register, int operand_width);
 ZydisRegister GetLow8BitRegister(ZydisRegister reg);
 ZydisRegister GetNBitRegister(ZydisRegister reg, size_t nbits);
 bool          IsGeneralPurposeRegister(ZydisRegister reg);
+bool          IsHigh8BitRegister(ZydisRegister reg);
+bool          IsSetCCInstruction(ZydisMnemonic mnemonic);
+
+const Xbyak::Reg& ZydisRegToXbyakReg(ZydisRegister reg);
 
 uint32_t Pushaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size);
 uint32_t Popaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size);
