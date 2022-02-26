@@ -67,7 +67,7 @@ private:
 		Xbyak::CodeGenerator& a,
 		size_t                rsp_position);
 
-	void AllocAlignStack(Xbyak::CodeGenerator& a,
+	void AllocAlignStackFix(Xbyak::CodeGenerator& a,
 						 size_t                rsp_position,
 						 size_t                size,
 						 size_t                alignment);

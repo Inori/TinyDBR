@@ -112,7 +112,7 @@ void X86MemoryMonitor::GenerateModRmWriteValue2Operands(const Instruction& inst,
 		if (byte_size > 8)
 		{
 			size_t stack_offset = ShadowSpaceSize + byte_size;
-			AllocAlignStack(a, rsp_position, stack_offset, byte_size);
+			AllocAlignStackFix(a, rsp_position, stack_offset, byte_size);
 
 			// vmovdqa [rsp], x/y/zmm
 			encoded_length = MovStackAVX(inst.zinst.instruction.machine_mode,
@@ -179,10 +179,10 @@ void X86MemoryMonitor::GenerateModRmWriteValue3Operands(
 	}
 }
 
-void X86MemoryMonitor::AllocAlignStack(Xbyak::CodeGenerator& a,
-									   size_t                rsp_position,
-									   size_t                size,
-									   size_t                alignment)
+void X86MemoryMonitor::AllocAlignStackFix(Xbyak::CodeGenerator& a,
+										  size_t                rsp_position,
+										  size_t                size,
+										  size_t                alignment)
 {
 	using namespace Xbyak::util;
 
