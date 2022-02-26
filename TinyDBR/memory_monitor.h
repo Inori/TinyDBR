@@ -45,14 +45,18 @@ private:
 	size_t GenerateMemoryCallback(
 		const Instruction&                 inst,
 		std::array<uint8_t, TempCodeSize>& code_buffer);
-	size_t MemoryMonitor::GenerateModRm(
+	size_t GenerateModRm(
 		const Instruction&                 inst,
 		std::array<uint8_t, TempCodeSize>& code_buffer);
-	size_t MemoryMonitor::GenerateString(
+	size_t GenerateString(
 		const Instruction&                 inst,
 		std::array<uint8_t, TempCodeSize>& code_buffer);
 
 	inline uint8_t BuildModRm(BYTE mod, BYTE reg, BYTE rm);
+	size_t GenerateModRmWriteValue(
+		const Instruction&                 inst,
+		std::array<uint8_t, TempCodeSize>& code_buffer);
+
 
 private:
 	// These functions will be called from generated assemble code.

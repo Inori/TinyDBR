@@ -9,7 +9,7 @@ pushfq
 pushaq
 mov rbp, rsp
 
-sub rsp, 20
+sub rsp, 0x20
 and rsp, 0xFFFFFFFFFFFFFFF0
 mov rcx, this
 lea rdx, [rcx+0x40]
@@ -32,7 +32,7 @@ pushfq
 pushaq
 mov rbp, rsp
 
-sub rsp, 20
+sub rsp, 0x20
 and rsp, 0xFFFFFFFFFFFFFFF0
 
 mov rcx, this
@@ -56,7 +56,7 @@ pushfq
 pushaq
 mov rbp, rsp
 
-sub rsp, 20
+sub rsp, 0x20
 and rsp, 0xFFFFFFFFFFFFFFF0
 
 shl rcx, 2          # 1 for w, 2 for d, 3 for q
@@ -82,3 +82,21 @@ mov rsp, rbp
 popaq
 popfq
 rep movsd
+
+
+
+
+
+__m128 __m256 __m512
+==================
+size = bits/8
+
+sub rsp, 0x20 + size
+and rsp, not (size - 1)
+vmovdqa [rsp], x/y/zmm
+
+mov rcx,112312313        
+mov rdx,400000           
+mov r8,16                
+lea r9, [rsp]
+call rax                 

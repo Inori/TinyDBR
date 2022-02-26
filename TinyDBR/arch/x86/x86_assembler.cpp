@@ -844,6 +844,27 @@ void X86Assembler::FixOffset(ModuleInfo *module,
     jmp_relative_offset;
 }
 
+void X86Assembler::PrintInstruction(const Instruction& inst)
+{
+#ifdef _DEBUG
+	const auto& zinst = inst.zinst;
+	char buffer[256];
+	ZydisFormatterFormatInstruction(&formatter,
+									&zinst.instruction, zinst.operands,
+									zinst.instruction.operand_count_visible,
+									buffer, sizeof(buffer), inst.address);
+
+	printf("%016" PRIX64 "  ", inst.address);
+	for (size_t i = 0; i != zinst.instruction.length; ++i)
+	{
+		uint8_t byte = ((uint8_t*)inst.address)[i];
+		printf("%02X ", byte);
+	}
+	printf(" %s\n", buffer);
+
+#endif  // _DEBUG
+}
+
 void X86Assembler::HandleBasicBlockEnd(
 	const char*                               address,
 	ModuleInfo*                               module,
@@ -1221,4 +1242,8 @@ void X86Assembler::Init()
 										? ZYDIS_STACK_WIDTH_64
 										: ZYDIS_STACK_WIDTH_32;
 	ZydisDecoderInit(&decoder, machine_mode, stack_width);
+
+#ifdef _DEBUG
+	ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
+#endif  // _DEBUG
 }

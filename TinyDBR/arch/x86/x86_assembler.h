@@ -75,6 +75,9 @@ public:
 				   uint32_t    jmp_offset,
 				   uint32_t    target_offset) override;
 
+
+	void PrintInstruction(const Instruction& inst) override;
+
 private:
 	inline void FixDisp4(ModuleInfo* module, int32_t disp);
 	void        ReadStack(ModuleInfo* module, int32_t offset);
@@ -98,6 +101,9 @@ private:
 
 private:
 	ZydisDecoder decoder;
+#ifdef _DEBUG
+	ZydisFormatter formatter;
+#endif  // _DEBUG
 };
 
 #endif  // ARCH_X86_X86_ASSEMBLER_H

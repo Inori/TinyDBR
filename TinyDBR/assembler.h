@@ -83,6 +83,8 @@ class Assembler {
                  uint32_t jmp_offset,
                  uint32_t target_offset) = 0;
 
+  virtual void PrintInstruction(const Instruction& inst) = 0;
+
  protected:
   TinyDBR &tinyinst_;
 };

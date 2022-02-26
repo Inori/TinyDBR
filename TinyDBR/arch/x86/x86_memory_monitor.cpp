@@ -45,6 +45,84 @@ uint8_t MemoryMonitor::BuildModRm(BYTE mod, BYTE reg, BYTE rm)
 	return modRm;
 }
 
+size_t MemoryMonitor::GenerateModRmWriteValue(
+	const Instruction& inst, 
+	std::array<uint8_t, TempCodeSize>& code_buffer)
+{
+	const auto& zinst   = inst.zinst.instruction;
+	size_t      cur_pos = 0;
+
+	if (zinst.operand_count_visible != 2)
+	{
+		FATAL("Not implemented.");
+	}
+
+	const auto& src_operand = inst.zinst.operands[1];
+	if (src_operand.type != ZYDIS_OPERAND_TYPE_REGISTER &&
+		src_operand.type != ZYDIS_OPERAND_TYPE_IMMEDIATE)
+	{
+		FATAL("Error operand type.");
+	}
+
+	bool is_gpr = (src_operand.type == ZYDIS_OPERAND_TYPE_REGISTER) &&
+				  IsGeneralPurposeRegister(src_operand.reg.value);
+	bool is_imm = src_operand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE;
+
+	uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+	size_t  encoded_length = sizeof(encoded_instruction);
+	if (is_gpr || is_imm)
+	{
+		// mov r9, value
+		encoded_length = MovReg(inst.zinst.instruction.machine_mode,
+								ZYDIS_REGISTER_R9, src_operand, encoded_instruction, encoded_length);
+		memcpy(&code_buffer[cur_pos], encoded_instruction, encoded_length);
+		cur_pos += encoded_length;
+	}
+	else
+	{
+		// process sse2 and avx instructions
+		uint8_t byte_size = src_operand.size / 8;
+		if (byte_size > 8)
+		{
+			uint8_t fixed_shadow_align_rsp[] = {
+				0x48, 0x83, 0xEC, 0x00,  // sub rsp, m
+				0x48, 0x83, 0xE4, 0x00   // and rsp, n
+			};
+			static_assert(sizeof(shadow_align_rsp) == sizeof(fixed_shadow_align_rsp), "Error rsp instruction size");
+
+			const uint8_t lea_r9_rsp[] = { 0x4C, 0x8D, 0x0C, 0x24 };
+
+			uint8_t stack_offset      = 0x20 + byte_size;
+			uint8_t align_value       = ~(byte_size - 1);
+			fixed_shadow_align_rsp[3] = stack_offset;
+			fixed_shadow_align_rsp[7] = align_value;
+			// fix stack offset and alignment at start buffer begin.
+			memcpy(&code_buffer[0], fixed_shadow_align_rsp, sizeof(fixed_shadow_align_rsp));
+
+			// vmovdqa [rsp], x/y/zmm
+			encoded_length = MovStackAVX(inst.zinst.instruction.machine_mode,
+										 0, src_operand, encoded_instruction, encoded_length);
+			memcpy(&code_buffer[cur_pos], encoded_instruction, encoded_length);
+			cur_pos += encoded_length;
+
+			// lea r9, [rsp]
+			memcpy(&code_buffer[cur_pos], lea_r9_rsp, sizeof(lea_r9_rsp));
+			cur_pos += sizeof(lea_r9_rsp);
+		}
+		else
+		{
+			// process some special sse/avx instructions
+			// e.g.  movsd qword ptr ds:[r13+0x20], xmm0
+
+			// movd/movq r9, xmmN
+			encoded_length = MovRegAVX(inst.zinst.instruction.machine_mode,
+									ZYDIS_REGISTER_R9, src_operand, encoded_instruction, encoded_length);
+			memcpy(&code_buffer[cur_pos], encoded_instruction, encoded_length);
+			cur_pos += encoded_length;
+		}
+	}
+	return cur_pos;
+}
 
 //mov rbx, [rcx + 0x40]
 //
@@ -73,7 +151,7 @@ size_t MemoryMonitor::GenerateModRm(
 {
 	uint8_t mov_rax[]          = { 0x48, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 	uint8_t mov_rcx[]          = { 0x48, 0xB9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-	uint8_t lea_reg[]          = { 0x8D, 0x00 };
+	uint8_t lea_reg[]          = { 0x48, 0x8D, 0x00 };
 	uint8_t mov_r8d[]          = { 0x41, 0xB8, 0x00, 0x00, 0x00, 0x00 };
 
 
@@ -97,7 +175,7 @@ size_t MemoryMonitor::GenerateModRm(
 
 	// lea rdx, [mem]
 	uint8_t modrm = BuildModRm(zinst.raw.modrm.mod, 0x2, zinst.raw.modrm.rm);
-	lea_reg[1]    = modrm;
+	lea_reg[2]    = modrm;
 	memcpy(&code_buffer[cur_pos], lea_reg, sizeof(lea_reg));
 	cur_pos += sizeof(lea_reg);
 
@@ -118,12 +196,6 @@ size_t MemoryMonitor::GenerateModRm(
 		cur_pos += disp_size;
 	}
 
-	// mov r8d, size
-	uint32_t mem_size                         = zinst.operand_width / 8;
-	*reinterpret_cast<uint32_t*>(&mov_r8d[2]) = reinterpret_cast<uint32_t>(mem_size);
-	memcpy(&code_buffer[cur_pos], mov_r8d, sizeof(mov_r8d));
-	cur_pos += sizeof(mov_r8d);
-
 	auto operand = GetExplicitMemoryOperand(
 		inst.zinst.operands,
 		inst.zinst.instruction.operand_count_visible);
@@ -131,8 +203,15 @@ size_t MemoryMonitor::GenerateModRm(
 	if ((operand->actions & ZYDIS_OPERAND_ACTION_CONDREAD) ||
 		(operand->actions & ZYDIS_OPERAND_ACTION_CONDWRITE))
 	{
+		assembler_->PrintInstruction(inst);
 		FATAL("Not implemented.");
 	}
+
+	// mov r8d, size
+	uint32_t mem_size                         = operand->size / 8;
+	*reinterpret_cast<uint32_t*>(&mov_r8d[2]) = reinterpret_cast<uint32_t>(mem_size);
+	memcpy(&code_buffer[cur_pos], mov_r8d, sizeof(mov_r8d));
+	cur_pos += sizeof(mov_r8d);
 
 	uint64_t callback = 0;
 	if (operand->actions & ZYDIS_OPERAND_ACTION_READ)
@@ -145,25 +224,11 @@ size_t MemoryMonitor::GenerateModRm(
 		auto func = decltype(&MemoryMonitor::OnMemoryWrite)(&MemoryMonitor::OnMemoryWrite);
 		callback  = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(func));
 
-		// mov r9, value
-		if (zinst.operand_count_visible != 2)
-		{
-			FATAL("Not implemented.");
-		}
+		std::array<uint8_t, TempCodeSize> buffer = {};
+		size_t buffer_length = GenerateModRmWriteValue(inst, buffer);
 
-		const auto& src_operand = inst.zinst.operands[1];
-		if (src_operand.type != ZYDIS_OPERAND_TYPE_REGISTER && 
-			src_operand.type != ZYDIS_OPERAND_TYPE_IMMEDIATE)
-		{
-			FATAL("Error operand type.");
-		}
-
-		uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
-		size_t  encoded_length = sizeof(encoded_instruction);
-		encoded_length         = MovReg(inst.zinst.instruction.machine_mode,
-                                ZYDIS_REGISTER_R9, src_operand, encoded_instruction, encoded_length);
-		memcpy(&code_buffer[cur_pos], encoded_instruction, encoded_length);
-		cur_pos += encoded_length;
+		memcpy(&code_buffer[cur_pos], buffer.data(), buffer_length);
+		cur_pos += buffer_length;
 	}
 
 	// mov rax, callback
@@ -222,7 +287,6 @@ size_t MemoryMonitor::GenerateString(
 	uint8_t mov_rax[]                = { 0x48, 0xB9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 	const auto& zinst        = inst.zinst.instruction;
-	uint8_t*    inst_address = reinterpret_cast<uint8_t*>(inst.address);
 	size_t      cur_pos      = 0;
 
 	// In 64-bit mode, if 67H is used to override address size attribute,
@@ -456,6 +520,7 @@ void MemoryMonitor::OnMemoryRead(void* address, size_t size)
 {
 }
 
+// when size >= 16, value is the memory address
 void MemoryMonitor::OnMemoryWrite(void* address, size_t size, size_t value)
 {
 }

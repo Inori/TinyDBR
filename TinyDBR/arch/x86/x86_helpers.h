@@ -27,11 +27,15 @@ ZydisRegister GetFullSizeRegister(ZydisRegister reg, int child_ptr_size);
 ZydisRegister GetUnusedRegister(ZydisRegister used_register, int operand_width);
 ZydisRegister GetLow8BitRegister(ZydisRegister reg);
 ZydisRegister GetNBitRegister(ZydisRegister reg, size_t nbits);
-
+bool          IsGeneralPurposeRegister(ZydisRegister reg);
 
 uint32_t Pushaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size);
 uint32_t Popaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size);
 uint32_t MovReg(ZydisMachineMode mmode, ZydisRegister dst, const ZydisDecodedOperand& src, 
+    unsigned char* encoded, size_t encoded_size);
+uint32_t MovRegAVX(ZydisMachineMode mmode, ZydisRegister dst, const ZydisDecodedOperand& src, 
+    unsigned char* encoded, size_t encoded_size);
+uint32_t MovStackAVX(ZydisMachineMode mmode, size_t stack_offset, const ZydisDecodedOperand& src, 
     unsigned char* encoded, size_t encoded_size);
 
 size_t GetExplicitMemoryOperandCount(

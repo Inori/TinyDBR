@@ -202,6 +202,11 @@ ZydisRegister GetNBitRegister(ZydisRegister reg, size_t nbits)
 	return result;
 }
 
+bool IsGeneralPurposeRegister(ZydisRegister reg)
+{
+	return (reg >= ZYDIS_REGISTER_AL) && (reg <= ZYDIS_REGISTER_R15);
+}
+
 uint32_t Pushaq(ZydisMachineMode mmode, unsigned char* encoded, size_t encoded_size)
 {
 	uint32_t olen = 0;
@@ -267,6 +272,86 @@ uint32_t MovReg(ZydisMachineMode mmode, ZydisRegister dst, const ZydisDecodedOpe
 	req.operands[1].type      = src.type;
 	req.operands[1].reg.value = src.reg.value;
 	req.operands[1].imm.u     = src.imm.value.u;
+
+	if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(&req, encoded, &encoded_size)))
+	{
+		FATAL("Failed to encode instruction");
+	}
+	return encoded_size;
+}
+
+uint32_t MovRegAVX(ZydisMachineMode mmode, ZydisRegister dst, const ZydisDecodedOperand& src, 
+	unsigned char* encoded, size_t encoded_size)
+{
+	ZydisMnemonic mnemonic  = ZYDIS_MNEMONIC_INVALID;
+	ZydisOperandSizeHint operand_size_hint = ZYDIS_OPERAND_SIZE_HINT_NONE;
+
+	uint32_t operand_size = src.size / 8;
+	switch (operand_size)
+	{
+	case 4:
+		mnemonic = ZYDIS_MNEMONIC_MOVD;
+		operand_size_hint = ZYDIS_OPERAND_SIZE_HINT_32;
+		break;
+	case 8:
+		mnemonic = ZYDIS_MNEMONIC_MOVQ;
+		operand_size_hint = ZYDIS_OPERAND_SIZE_HINT_64;
+		break;
+	default:
+		FATAL("Error operand size.");
+		break;
+	}
+
+	ZydisEncoderRequest req;
+	memset(&req, 0, sizeof(req));
+	req.mnemonic                     = mnemonic;
+	req.operand_count                = 2;
+	req.operand_size_hint            = operand_size_hint;
+	req.operands[0].type             = ZYDIS_OPERAND_TYPE_REGISTER;
+	req.operands[0].reg.value        = GetNBitRegister(dst, src.size);
+
+	req.operands[1].type      = src.type;
+	req.operands[1].reg.value = src.reg.value;
+
+	if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(&req, encoded, &encoded_size)))
+	{
+		FATAL("Failed to encode instruction");
+	}
+	return encoded_size;
+}
+
+uint32_t MovStackAVX(ZydisMachineMode mmode, size_t stack_offset, const ZydisDecodedOperand& src,
+	unsigned char* encoded, size_t encoded_size)
+{
+	uint32_t      byte_size = src.size / 8;
+	ZydisMnemonic mnemonic  = ZYDIS_MNEMONIC_INVALID;
+	// use aligned load to force memory align thus improve performance
+	switch (byte_size)
+	{
+	case 16:
+		mnemonic = ZYDIS_MNEMONIC_MOVDQA;
+		break;
+	case 32:
+	case 64:
+		mnemonic = ZYDIS_MNEMONIC_VMOVDQA;
+		break;
+	default:
+		FATAL("Error operand size.");
+		break;
+	}
+
+	ZydisEncoderRequest req;
+	memset(&req, 0, sizeof(req));
+	req.machine_mode                 = mmode;
+	req.mnemonic                     = mnemonic;
+	req.operand_count                = 2;
+	req.operands[0].type             = ZYDIS_OPERAND_TYPE_MEMORY;
+	req.operands[0].mem.size         = src.size / 8;
+	req.operands[0].mem.base         = ZYDIS_REGISTER_RSP;
+	req.operands[0].mem.displacement = stack_offset;
+
+	req.operands[1].type      = src.type;
+	req.operands[1].reg.value = src.reg.value;
 
 	if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(&req, encoded, &encoded_size)))
 	{
