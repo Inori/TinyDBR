@@ -63,9 +63,7 @@ void X86MemoryMonitor::GenerateModRmWriteValue1Operand(const Instruction& inst,
 	}
 	else
 	{
-		assembler_->PrintInstruction(inst);
-		// FATAL("Not supported instruction.");
-		WARN("Not supported instruction.");
+		GenerateModRmWriteValueUsingStack(inst, a, rsp_position);
 	}
 }
 
@@ -142,8 +140,15 @@ void X86MemoryMonitor::GenerateModRmWriteValue3Operands(
 	const auto& zinst    = inst.zinst;
 	auto        category = zinst.instruction.meta.category;
 
-	if (category == ZYDIS_CATEGORY_SSE ||
-		(category >= ZYDIS_CATEGORY_AVX && category <= ZYDIS_CATEGORY_AVX512_VP2INTERSECT))
+	size_t      mem_idx     = 0;
+	const auto& dst_operand = GetExplicitMemoryOperand(
+		zinst.operands, zinst.instruction.operand_count_visible, &mem_idx);
+
+	size_t operand_width = dst_operand.size / 8;
+
+	bool is_sse_or_avx = category == ZYDIS_CATEGORY_SSE ||
+						 (category >= ZYDIS_CATEGORY_AVX && category <= ZYDIS_CATEGORY_AVX512_VP2INTERSECT);
+	if (is_sse_or_avx && operand_width <= sizeof(size_t))
 	{
 		ZydisEncoderRequest req = {};
 		if (ZYAN_FAILED(ZydisEncoderDecodedInstructionToEncoderRequest(
@@ -152,12 +157,6 @@ void X86MemoryMonitor::GenerateModRmWriteValue3Operands(
 				&req)))
 		{
 			FATAL("Convert instruction request failed.");
-		}
-
-		const auto& dst_operand = inst.zinst.operands[0];
-		if (dst_operand.type != ZYDIS_OPERAND_TYPE_MEMORY)
-		{
-			FATAL("Operand type is not memory.");
 		}
 
 		req.operands[0].type      = ZYDIS_OPERAND_TYPE_REGISTER;
@@ -174,9 +173,76 @@ void X86MemoryMonitor::GenerateModRmWriteValue3Operands(
 	}
 	else
 	{
-		assembler_->PrintInstruction(inst);
-		WARN("Not supported instruction.");
+		GenerateModRmWriteValueUsingStack(inst, a, rsp_position);
 	}
+}
+
+// some instructions are hard to change memory operand directly to register,
+// so we use stack as the temp value storage.
+// this will add an extra memory write operation which will 
+// slow down the speed somehow.
+// this could be used for any modrm instruction in theory,
+// but for performance reason, use this as little as possible.
+void X86MemoryMonitor::GenerateModRmWriteValueUsingStack(
+	const Instruction& inst, Xbyak::CodeGenerator& a, size_t rsp_position)
+{
+	using namespace Xbyak::util;
+
+	const auto& zinst = inst.zinst;
+
+	// one x86 can only have one modrm byte,
+	// thus can only have one memory operand
+	// (except hidden ones like stack push/pop)
+	// this way the only memory operand must be
+	// the write destination at here.
+	size_t      mem_idx     = 0;
+	const auto& dst_operand = GetExplicitMemoryOperand(
+		zinst.operands, zinst.instruction.operand_count_visible, &mem_idx);
+
+	size_t operand_width = dst_operand.size / 8;
+	size_t stack_size    = ShadowSpaceSize + operand_width;
+	size_t alignment     = operand_width > 16 ? operand_width : 16;
+	AllocAlignStackFix(a, rsp_position, stack_size, alignment);
+
+	ZydisEncoderRequest req = {};
+	if (ZYAN_FAILED(ZydisEncoderDecodedInstructionToEncoderRequest(
+			&zinst.instruction,
+			zinst.operands, zinst.instruction.operand_count_visible,
+			&req)))
+	{
+		FATAL("Convert instruction request failed.");
+	}
+
+	if (mem_idx != 0)
+	{
+		assembler_->PrintInstruction(inst);
+		WARN("Memory operand not at first.");
+	}
+
+	req.operands[mem_idx].type = ZYDIS_OPERAND_TYPE_MEMORY;
+
+	memset(&(req.operands[mem_idx].mem), 0, sizeof(req.operands[mem_idx].mem));
+	req.operands[mem_idx].mem.base = ZYDIS_REGISTER_RSP;
+	req.operands[mem_idx].mem.size = operand_width;
+	
+	ZyanU8    encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+	ZyanUSize encoded_length = sizeof(encoded_instruction);
+	if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(
+			&req, encoded_instruction, &encoded_length)))
+	{
+		FATAL("Encode instruction failed.");
+	}
+	a.db(encoded_instruction, encoded_length);
+
+	if (operand_width > sizeof(size_t))
+	{
+		a.lea(r9, ptr [rsp]);
+	}
+	else
+	{
+		a.mov(r9, ptr [rsp]);
+	}
+	
 }
 
 void X86MemoryMonitor::AllocAlignStackFix(Xbyak::CodeGenerator& a,
@@ -211,7 +277,6 @@ void X86MemoryMonitor::GenerateModRmWriteValue(
 	Xbyak::CodeGenerator& a,
 	size_t                rsp_position)
 {
-
 	const auto& zinst = inst.zinst.instruction;
 	switch (zinst.operand_count_visible)
 	{
@@ -225,9 +290,7 @@ void X86MemoryMonitor::GenerateModRmWriteValue(
 		GenerateModRmWriteValue3Operands(inst, a, rsp_position);
 		break;
 	default:
-		assembler_->PrintInstruction(inst);
-		//FATAL("Operand count %d is not supported.", zinst.operand_count_visible);
-		WARN("Operand count %d is not supported.", zinst.operand_count_visible);
+		GenerateModRmWriteValueUsingStack(inst, a, rsp_position);
 		break;
 	}
 }
@@ -260,11 +323,11 @@ void X86MemoryMonitor::GenerateModRm(const Instruction& inst, Xbyak::CodeGenerat
 
 	const auto& zinst = inst.zinst.instruction;
 
-	auto operand = GetExplicitMemoryOperand(
+	const auto& operand = GetExplicitMemoryOperand(
 		inst.zinst.operands,
 		inst.zinst.instruction.operand_count_visible);
 
-	if (operand->mem.base == ZYDIS_REGISTER_RSP || operand->mem.base == ZYDIS_REGISTER_ESP)
+	if (operand.mem.base == ZYDIS_REGISTER_RSP || operand.mem.base == ZYDIS_REGISTER_ESP)
 	{
 		FATAL("Not support rsp/esp modrm.");
 	}
@@ -273,7 +336,7 @@ void X86MemoryMonitor::GenerateModRm(const Instruction& inst, Xbyak::CodeGenerat
 	uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
 	size_t  encoded_length = sizeof(encoded_instruction);
 	encoded_length         = LeaReg(zinst.machine_mode, ZYDIS_REGISTER_RDX,
-                            *operand, zinst.address_width, encoded_instruction, encoded_length);
+                             operand, zinst.address_width, encoded_instruction, encoded_length);
 	a.db(encoded_instruction, encoded_length);
 
 	// backup rsp
@@ -297,18 +360,18 @@ void X86MemoryMonitor::GenerateModRm(const Instruction& inst, Xbyak::CodeGenerat
 	//	FATAL("Not implemented.");
 	//}
 
-	if ((operand->actions & ZYDIS_OPERAND_ACTION_CONDREAD))
+	if ((operand.actions & ZYDIS_OPERAND_ACTION_CONDREAD))
 	{
 		assembler_->PrintInstruction(inst);
 		FATAL("Not implemented.");
 	}
 
 	// mov r8d, size
-	uint32_t mem_size = operand->size / 8;
+	uint32_t mem_size = operand.size / 8;
 	a.mov(r8d, mem_size);
 
 	uint64_t callback = 0;
-	if (operand->actions & ZYDIS_OPERAND_ACTION_READ)
+	if (operand.actions & ZYDIS_OPERAND_ACTION_READ)
 	{
 		auto func = decltype(&X86MemoryMonitor::OnMemoryRead)(&X86MemoryMonitor::OnMemoryRead);
 		callback  = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(func));
@@ -532,8 +595,9 @@ bool X86MemoryMonitor::NeedToHandle(Instruction& inst)
 			break;
 		}
 	
-		auto operand = GetExplicitMemoryOperand(zinst.operands, zinst.instruction.operand_count_visible);
-		if (operand->mem.segment == ZYDIS_REGISTER_GS || operand->mem.segment == ZYDIS_REGISTER_FS)
+		const auto& operand = GetExplicitMemoryOperand(
+			zinst.operands, zinst.instruction.operand_count_visible);
+		if (operand.mem.segment == ZYDIS_REGISTER_GS || operand.mem.segment == ZYDIS_REGISTER_FS)
 		{
 			break;
 		}

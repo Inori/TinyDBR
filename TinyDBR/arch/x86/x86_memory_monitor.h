@@ -66,6 +66,10 @@ private:
 		const Instruction&    inst,
 		Xbyak::CodeGenerator& a,
 		size_t                rsp_position);
+	void GenerateModRmWriteValueUsingStack(
+		const Instruction&    inst,
+		Xbyak::CodeGenerator& a,
+		size_t                rsp_position);
 
 	void AllocAlignStackFix(Xbyak::CodeGenerator& a,
 						 size_t                rsp_position,
