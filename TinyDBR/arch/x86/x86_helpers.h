@@ -47,7 +47,7 @@ uint32_t LeaReg(ZydisMachineMode mmode, ZydisRegister dst, const ZydisDecodedOpe
 size_t GetExplicitMemoryOperandCount(
     const ZydisDecodedOperand* operands, size_t count);
 
-const ZydisDecodedOperand& GetExplicitMemoryOperand(
+const ZydisDecodedOperand* GetExplicitMemoryOperand(
 	const ZydisDecodedOperand* operands, size_t count, size_t* index = nullptr);
 
 

@@ -454,7 +454,7 @@ size_t GetExplicitMemoryOperandCount(const ZydisDecodedOperand* operands, size_t
 	return mem_operand_count;
 }
 
-const ZydisDecodedOperand& GetExplicitMemoryOperand(
+const ZydisDecodedOperand* GetExplicitMemoryOperand(
 	const ZydisDecodedOperand* operands, size_t count, size_t* index)
 {
 	const ZydisDecodedOperand* mem_operand = nullptr;
@@ -478,7 +478,7 @@ const ZydisDecodedOperand& GetExplicitMemoryOperand(
 		}
 		break;
 	}
-	return *mem_operand;
+	return mem_operand;
 }
 
 #if 0

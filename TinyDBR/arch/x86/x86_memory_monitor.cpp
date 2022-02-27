@@ -19,10 +19,21 @@ X86MemoryMonitor::InstructionType X86MemoryMonitor::GetInstructionType(const Ins
 
 	const auto&     zinst = inst.zinst.instruction;
 	const auto      category = zinst.meta.category;
+	const auto      mem_op   = GetExplicitMemoryOperand(inst.zinst.operands, zinst.operand_count_visible);
 
-	if (zinst.raw.modrm.offset != 0)
+	if (zinst.attributes & ZYDIS_ATTRIB_HAS_MODRM)
 	{
 		type = InstructionType::ModRm;
+	}
+	else if (mem_op != nullptr &&
+			 mem_op->mem.base == ZYDIS_REGISTER_NONE &&
+			 mem_op->mem.index == ZYDIS_REGISTER_NONE)
+	{
+		type = InstructionType::AbsAddr;
+	}
+	else if (zinst.mnemonic == ZYDIS_MNEMONIC_XLAT)
+	{
+		type = InstructionType::Xlat;	
 	}
 	else if (category == ZYDIS_CATEGORY_STRINGOP)
 	{
@@ -295,6 +306,20 @@ void X86MemoryMonitor::GenerateModRmWriteValue(
 	}
 }
 
+void X86MemoryMonitor::GenerateGetMemoryAddress(
+	const Instruction&    inst,
+	Xbyak::CodeGenerator& a,
+	ZydisRegister         dst)
+{
+
+	// lea rdx, [mem]
+	uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+	size_t  encoded_length = sizeof(encoded_instruction);
+	encoded_length         = LeaReg(zinst.machine_mode, ZYDIS_REGISTER_RDX,
+                            operand, zinst.address_width, encoded_instruction, encoded_length);
+	a.db(encoded_instruction, encoded_length);
+}
+
 //mov rbx, [rcx + 0x40]
 //
 //-------------------------------
@@ -323,21 +348,16 @@ void X86MemoryMonitor::GenerateModRm(const Instruction& inst, Xbyak::CodeGenerat
 
 	const auto& zinst = inst.zinst.instruction;
 
-	const auto& operand = GetExplicitMemoryOperand(
+	const auto operand = GetExplicitMemoryOperand(
 		inst.zinst.operands,
 		inst.zinst.instruction.operand_count_visible);
 
-	if (operand.mem.base == ZYDIS_REGISTER_RSP || operand.mem.base == ZYDIS_REGISTER_ESP)
+	if (operand->mem.base == ZYDIS_REGISTER_RSP || operand->mem.base == ZYDIS_REGISTER_ESP)
 	{
 		FATAL("Not support rsp/esp modrm.");
 	}
-	
-	// lea rdx, [mem]
-	uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
-	size_t  encoded_length = sizeof(encoded_instruction);
-	encoded_length         = LeaReg(zinst.machine_mode, ZYDIS_REGISTER_RDX,
-                             operand, zinst.address_width, encoded_instruction, encoded_length);
-	a.db(encoded_instruction, encoded_length);
+
+	GenerateGetMemoryAddress(inst, a, ZYDIS_REGISTER_RDX);
 
 	// backup rsp
 	a.mov(rbp, rsp);
@@ -360,18 +380,18 @@ void X86MemoryMonitor::GenerateModRm(const Instruction& inst, Xbyak::CodeGenerat
 	//	FATAL("Not implemented.");
 	//}
 
-	if ((operand.actions & ZYDIS_OPERAND_ACTION_CONDREAD))
+	if ((operand->actions & ZYDIS_OPERAND_ACTION_CONDREAD))
 	{
 		assembler_->PrintInstruction(inst);
 		FATAL("Not implemented.");
 	}
 
 	// mov r8d, size
-	uint32_t mem_size = operand.size / 8;
+	uint32_t mem_size = operand->size / 8;
 	a.mov(r8d, mem_size);
 
 	uint64_t callback = 0;
-	if (operand.actions & ZYDIS_OPERAND_ACTION_READ)
+	if (operand->actions & ZYDIS_OPERAND_ACTION_READ)
 	{
 		auto func = decltype(&X86MemoryMonitor::OnMemoryRead)(&X86MemoryMonitor::OnMemoryRead);
 		callback  = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(func));
@@ -387,6 +407,26 @@ void X86MemoryMonitor::GenerateModRm(const Instruction& inst, Xbyak::CodeGenerat
 	a.mov(rax, callback);
 	a.call(rax);
 	a.mov(rsp, rbp);
+}
+
+void X86MemoryMonitor::GenerateAbsAddr(const Instruction& inst, Xbyak::CodeGenerator& a)
+{
+	using namespace Xbyak::util;
+
+	const auto operand = GetExplicitMemoryOperand(
+		inst.zinst.operands,
+		inst.zinst.instruction.operand_count_visible);
+
+	if (!operand || !operand->mem.disp.has_displacement)
+	{
+		FATAL("No memory operand found.");
+	}
+	
+	a.mov(rdx, operand->mem.disp.value);
+}
+
+void X86MemoryMonitor::GenerateXlat(const Instruction& inst, Xbyak::CodeGenerator& a)
+{
 }
 
 // rep movsd
@@ -418,7 +458,7 @@ void X86MemoryMonitor::GenerateModRm(const Instruction& inst, Xbyak::CodeGenerat
 // popaq
 // popfq
 // rep movsd
-void X86MemoryMonitor::GenerateString(const Instruction& inst, Xbyak::CodeGenerator& a)
+void X86MemoryMonitor::GenerateStringOp(const Instruction& inst, Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
 
@@ -495,8 +535,14 @@ void X86MemoryMonitor::GenerateMemoryCallback(const Instruction& inst, Xbyak::Co
 	case InstructionType::ModRm:
 		GenerateModRm(inst, a);
 		break;
+	case InstructionType::AbsAddr:
+		GenerateAbsAddr(inst, a);
+		break;
+	case InstructionType::Xlat:
+		GenerateXlat(inst, a);
+		break;
 	case InstructionType::StringOp:
-		GenerateString(inst, a);
+		GenerateStringOp(inst, a);
 		break;
 	default:
 		FATAL("Unknown instruction type.");

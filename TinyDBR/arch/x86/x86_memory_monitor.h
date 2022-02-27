@@ -16,6 +16,8 @@ private:
 	{
 		None,
 		ModRm,
+		AbsAddr,
+		Xlat,
 		StringOp
 	};
 
@@ -46,9 +48,20 @@ private:
 	void GenerateModRm(
 		const Instruction&    inst,
 		Xbyak::CodeGenerator& a);
-	void GenerateString(
+	void GenerateAbsAddr(
 		const Instruction&    inst,
 		Xbyak::CodeGenerator& a);
+	void GenerateXlat(
+		const Instruction&    inst,
+		Xbyak::CodeGenerator& a);
+	void GenerateStringOp(
+		const Instruction&    inst,
+		Xbyak::CodeGenerator& a);
+
+	void GenerateGetMemoryAddress(
+		const Instruction&    inst,
+		Xbyak::CodeGenerator& a,
+		ZydisRegister         dst);
 
 	void GenerateModRmWriteValue(
 		const Instruction&    inst,
