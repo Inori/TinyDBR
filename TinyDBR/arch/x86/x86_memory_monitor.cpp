@@ -152,10 +152,10 @@ void X86MemoryMonitor::GenerateModRmWriteValue3Operands(
 	auto        category = zinst.instruction.meta.category;
 
 	size_t      mem_idx     = 0;
-	const auto& dst_operand = GetExplicitMemoryOperand(
+	const auto dst_operand = GetExplicitMemoryOperand(
 		zinst.operands, zinst.instruction.operand_count_visible, &mem_idx);
 
-	size_t operand_width = dst_operand.size / 8;
+	size_t operand_width = dst_operand->size / 8;
 
 	bool is_sse_or_avx = category == ZYDIS_CATEGORY_SSE ||
 						 (category >= ZYDIS_CATEGORY_AVX && category <= ZYDIS_CATEGORY_AVX512_VP2INTERSECT);
@@ -171,7 +171,7 @@ void X86MemoryMonitor::GenerateModRmWriteValue3Operands(
 		}
 
 		req.operands[0].type      = ZYDIS_OPERAND_TYPE_REGISTER;
-		req.operands[0].reg.value = GetNBitRegister(ZYDIS_REGISTER_R9, dst_operand.size);
+		req.operands[0].reg.value = GetNBitRegister(ZYDIS_REGISTER_R9, dst_operand->size);
 
 		ZyanU8    encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
 		ZyanUSize encoded_length = sizeof(encoded_instruction);
@@ -188,11 +188,13 @@ void X86MemoryMonitor::GenerateModRmWriteValue3Operands(
 	}
 }
 
-// some instructions are hard to change memory operand directly to register,
+// replace the destination memory operand with temporary stack memory.
+// some instructions are hard to change memory operand to register directly,
 // so we use stack as the temp value storage.
 // this will add an extra memory write operation which will 
 // slow down the speed somehow.
-// this could be used for any modrm instruction in theory,
+// this could be used for any modrm instruction in theory 
+// (except for VSIB, which will be processed separately)
 // but for performance reason, use this as little as possible.
 void X86MemoryMonitor::GenerateModRmWriteValueUsingStack(
 	const Instruction& inst, Xbyak::CodeGenerator& a, size_t rsp_position)
@@ -206,11 +208,11 @@ void X86MemoryMonitor::GenerateModRmWriteValueUsingStack(
 	// (except hidden ones like stack push/pop)
 	// this way the only memory operand must be
 	// the write destination at here.
-	size_t      mem_idx     = 0;
-	const auto& dst_operand = GetExplicitMemoryOperand(
+	size_t     mem_idx     = 0;
+	const auto dst_operand = GetExplicitMemoryOperand(
 		zinst.operands, zinst.instruction.operand_count_visible, &mem_idx);
 
-	size_t operand_width = dst_operand.size / 8;
+	size_t operand_width = dst_operand->size / 8;
 	size_t stack_size    = ShadowSpaceSize + operand_width;
 	size_t alignment     = operand_width > 16 ? operand_width : 16;
 	AllocAlignStackFix(a, rsp_position, stack_size, alignment);
@@ -311,13 +313,53 @@ void X86MemoryMonitor::GenerateGetMemoryAddress(
 	Xbyak::CodeGenerator& a,
 	ZydisRegister         dst)
 {
+	const auto& zinst  = inst.zinst;
+	const auto  mem_op = GetExplicitMemoryOperand(
+		zinst.operands, zinst.instruction.operand_count_visible);
+	if (mem_op->mem.base != ZYDIS_REGISTER_RIP)
+	{
+		if (mem_op->mem.type != ZYDIS_MEMOP_TYPE_VSIB)
+		{
+			// lea rdx, [mem]
+			uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+			size_t  encoded_length = sizeof(encoded_instruction);
+			encoded_length         = LeaReg(zinst.instruction.machine_mode, dst,
+											*mem_op, zinst.instruction.address_width,
+											encoded_instruction, encoded_length);
+			a.db(encoded_instruction, encoded_length);
+		}
+		else
+		{
+			GenerateGetMemoryAddressVSIB(inst, a, dst);
+		}
+	}
+	else
+	{
+		// rip-relative address
 
-	// lea rdx, [mem]
-	uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
-	size_t  encoded_length = sizeof(encoded_instruction);
-	encoded_length         = LeaReg(zinst.machine_mode, ZYDIS_REGISTER_RDX,
-                            operand, zinst.address_width, encoded_instruction, encoded_length);
-	a.db(encoded_instruction, encoded_length);
+		// TODO:
+		// currently, inst.address is not the runtime address of the instruction
+		// as we decode on the backup memory, which is not needed when we are already
+		// running in the memory space of the target process.
+		// we should remove the old TinyInst's backup strategy and use real runtime address.
+		FATAL("TODO: runtime address is not implemented.");
+
+		ZyanU64 abs_address = 0;
+		if (ZYAN_FAILED(ZydisCalcAbsoluteAddress(
+			&zinst.instruction,
+			mem_op,
+			inst.address,
+			&abs_address)))
+		{
+			FATAL("Calculate absolute address failed.");
+		}
+		a.mov(ZydisRegToXbyakReg(dst), abs_address);
+	}
+}
+
+void X86MemoryMonitor::GenerateGetMemoryAddressVSIB(
+	const Instruction& inst, Xbyak::CodeGenerator& a, ZydisRegister dst)
+{
 }
 
 //mov rbx, [rcx + 0x40]

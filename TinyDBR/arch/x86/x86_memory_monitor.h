@@ -63,6 +63,11 @@ private:
 		Xbyak::CodeGenerator& a,
 		ZydisRegister         dst);
 
+	void GenerateGetMemoryAddressVSIB(
+		const Instruction&    inst,
+		Xbyak::CodeGenerator& a,
+		ZydisRegister         dst);
+
 	void GenerateModRmWriteValue(
 		const Instruction&    inst,
 		Xbyak::CodeGenerator& a,
