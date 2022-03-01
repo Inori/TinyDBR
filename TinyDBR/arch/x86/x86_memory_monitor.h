@@ -65,6 +65,12 @@ private:
 		const ZydisDecodedOperand* mem_operand,
 		ZydisRegister              dst);
 
+	void EmitGetMemoryAddressNormal(
+		const Instruction&         inst,
+		Xbyak::CodeGenerator&      a,
+		const ZydisDecodedOperand* mem_operand,
+		ZydisRegister              dst);
+
 	void EmitGetMemoryAddressVSIB(
 		const Instruction&    inst,
 		Xbyak::CodeGenerator& a,
@@ -89,49 +95,6 @@ private:
 		const Instruction&    inst,
 		Xbyak::CodeGenerator& a,
 		ZydisRegister         addr_register);
-
-
-
-
-
-
-	void EmitModRm(
-		const Instruction& inst,
-		Xbyak::CodeGenerator& a,
-		MemoryAction action);
-	void EmitAbsAddr(
-		const Instruction& inst,
-		Xbyak::CodeGenerator& a,
-		MemoryAction action);
-
-
-
-
-	void EmitModRmWriteValue(
-		const Instruction&    inst,
-		Xbyak::CodeGenerator& a,
-		size_t                rsp_position);
-	void GenerateModRmWriteValue1Operand(
-		const Instruction&    inst,
-		Xbyak::CodeGenerator& a,
-		size_t                rsp_position);
-	void GenerateModRmWriteValue2Operands(
-		const Instruction&    inst,
-		Xbyak::CodeGenerator& a,
-		size_t                rsp_position);
-	void GenerateModRmWriteValue3Operands(
-		const Instruction&    inst,
-		Xbyak::CodeGenerator& a,
-		size_t                rsp_position);
-	void GenerateModRmWriteValueUsingStack(
-		const Instruction&    inst,
-		Xbyak::CodeGenerator& a,
-		size_t                rsp_position);
-
-	void AllocAlignStackFix(Xbyak::CodeGenerator& a,
-						 size_t                rsp_position,
-						 size_t                size,
-						 size_t                alignment);
 
 private:
 	std::array<uint8_t, TempCodeSize>     code_buffer;

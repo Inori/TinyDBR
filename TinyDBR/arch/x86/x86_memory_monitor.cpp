@@ -43,277 +43,14 @@ X86MemoryMonitor::InstructionType X86MemoryMonitor::GetInstructionType(const Ins
 	return type;
 }
 
-void X86MemoryMonitor::GenerateModRmWriteValue1Operand(const Instruction& inst, 
-	Xbyak::CodeGenerator& a, size_t rsp_position)
-{
-	using namespace Xbyak::util;
-
-	const auto& zinst = inst.zinst;
-	if (IsSetCCInstruction(zinst.instruction.mnemonic))
-	{
-		ZydisEncoderRequest req = {};
-		if (ZYAN_FAILED(ZydisEncoderDecodedInstructionToEncoderRequest(
-			&zinst.instruction, 
-			zinst.operands, zinst.instruction.operand_count_visible, 
-			&req)))
-		{
-			FATAL("Convert instruction request failed.");
-		}
-
-		req.operands[0].type = ZYDIS_OPERAND_TYPE_REGISTER;
-		req.operands[0].reg.value = ZYDIS_REGISTER_R9B;
-
-		ZyanU8    encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
-		ZyanUSize encoded_length = sizeof(encoded_instruction);
-		if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(
-			&req, encoded_instruction, &encoded_length)))
-		{
-			FATAL("Encode instruction failed.");
-		}
-		a.db(encoded_instruction, encoded_length);
-	}
-	else
-	{
-		GenerateModRmWriteValueUsingStack(inst, a, rsp_position);
-	}
-}
-
-void X86MemoryMonitor::GenerateModRmWriteValue2Operands(const Instruction& inst, 
-	Xbyak::CodeGenerator& a, size_t rsp_position)
-{
-	using namespace Xbyak::util;
-
-	const auto& src_operand = inst.zinst.operands[1];
-	if (src_operand.type != ZYDIS_OPERAND_TYPE_REGISTER &&
-		src_operand.type != ZYDIS_OPERAND_TYPE_IMMEDIATE)
-	{
-		FATAL("Error operand type.");
-	}
-
-	bool is_gpr = (src_operand.type == ZYDIS_OPERAND_TYPE_REGISTER) &&
-				  IsGeneralPurposeRegister(src_operand.reg.value);
-	bool is_imm = src_operand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE;
-
-	uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH * 2];
-	size_t  encoded_length = sizeof(encoded_instruction);
-	if (is_gpr || is_imm)
-	{
-		auto src_op = src_operand;
-		if (is_gpr && IsHigh8BitRegister(src_operand.reg.value))
-		{
-			// since we can't mov ah/ch/dh/bh to r9b directly,
-			// we mov it to it's lower 8 bit register accordingly
-			auto src_reg = src_operand.reg.value;
-			auto dst_reg = GetLow8BitRegister(src_reg);
-			a.mov(ZydisRegToXbyakReg(dst_reg), ZydisRegToXbyakReg(src_reg));
-			// then update source operand's register
-			src_op.reg.value = dst_reg;
-		}
-		// mov r9, value
-		encoded_length = MovReg(inst.zinst.instruction.machine_mode,
-								ZYDIS_REGISTER_R9, src_op, encoded_instruction, encoded_length);
-		a.db(encoded_instruction, encoded_length);
-	}
-	else
-	{
-		// process sse2 and avx instructions
-		size_t byte_size = src_operand.size / 8;
-		if (byte_size > 8)
-		{
-			size_t stack_offset = ShadowSpaceSize + byte_size;
-			AllocAlignStackFix(a, rsp_position, stack_offset, byte_size);
-
-			// vmovdqa [rsp], x/y/zmm
-			encoded_length = MovStackAVX(inst.zinst.instruction.machine_mode,
-										 0, src_operand, encoded_instruction, encoded_length);
-			a.db(encoded_instruction, encoded_length);
-
-			a.lea(r9, ptr [rsp]);
-		}
-		else
-		{
-			// process some special sse/avx instructions
-			// e.g.  movsd qword ptr ds:[r13+0x20], xmm0
-
-			// movd/movq r9, xmmN
-			encoded_length = MovRegAVX(inst.zinst.instruction.machine_mode,
-									   ZYDIS_REGISTER_R9, src_operand, encoded_instruction, encoded_length);
-			a.db(encoded_instruction, encoded_length);
-		}
-	}
-}
-
-void X86MemoryMonitor::GenerateModRmWriteValue3Operands(
-	const Instruction& inst, Xbyak::CodeGenerator& a, size_t rsp_position)
-{
-	using namespace Xbyak::util;
-
-	const auto& zinst    = inst.zinst;
-	auto        category = zinst.instruction.meta.category;
-
-	size_t      mem_idx     = 0;
-	const auto dst_operand = GetExplicitMemoryOperand(
-		zinst.operands, zinst.instruction.operand_count_visible, &mem_idx);
-
-	size_t operand_width = dst_operand->size / 8;
-
-	bool is_sse_or_avx = category == ZYDIS_CATEGORY_SSE ||
-						 (category >= ZYDIS_CATEGORY_AVX && category <= ZYDIS_CATEGORY_AVX512_VP2INTERSECT);
-	if (is_sse_or_avx && operand_width <= sizeof(size_t))
-	{
-		ZydisEncoderRequest req = {};
-		if (ZYAN_FAILED(ZydisEncoderDecodedInstructionToEncoderRequest(
-				&zinst.instruction,
-				zinst.operands, zinst.instruction.operand_count_visible,
-				&req)))
-		{
-			FATAL("Convert instruction request failed.");
-		}
-
-		req.operands[0].type      = ZYDIS_OPERAND_TYPE_REGISTER;
-		req.operands[0].reg.value = GetNBitRegister(ZYDIS_REGISTER_R9, dst_operand->size);
-
-		ZyanU8    encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
-		ZyanUSize encoded_length = sizeof(encoded_instruction);
-		if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(
-				&req, encoded_instruction, &encoded_length)))
-		{
-			FATAL("Encode instruction failed.");
-		}
-		a.db(encoded_instruction, encoded_length);
-	}
-	else
-	{
-		GenerateModRmWriteValueUsingStack(inst, a, rsp_position);
-	}
-}
-
-// replace the destination memory operand with temporary stack memory.
-// some instructions are hard to change memory operand to register directly,
-// so we use stack as the temp value storage.
-// this will add an extra memory write operation which will 
-// slow down the speed somehow.
-// this could be used for any modrm instruction in theory 
-// (except for VSIB, which will be processed separately)
-// but for performance reason, use this as little as possible.
-void X86MemoryMonitor::GenerateModRmWriteValueUsingStack(
-	const Instruction& inst, Xbyak::CodeGenerator& a, size_t rsp_position)
-{
-	using namespace Xbyak::util;
-
-	const auto& zinst = inst.zinst;
-
-	// one x86 can only have one modrm byte,
-	// thus can only have one memory operand
-	// (except hidden ones like stack push/pop)
-	// this way the only memory operand must be
-	// the write destination at here.
-	size_t     mem_idx     = 0;
-	const auto dst_operand = GetExplicitMemoryOperand(
-		zinst.operands, zinst.instruction.operand_count_visible, &mem_idx);
-
-	size_t operand_width = dst_operand->size / 8;
-	size_t stack_size    = ShadowSpaceSize + operand_width;
-	size_t alignment     = operand_width > 16 ? operand_width : 16;
-	AllocAlignStackFix(a, rsp_position, stack_size, alignment);
-
-	ZydisEncoderRequest req = {};
-	if (ZYAN_FAILED(ZydisEncoderDecodedInstructionToEncoderRequest(
-			&zinst.instruction,
-			zinst.operands, zinst.instruction.operand_count_visible,
-			&req)))
-	{
-		FATAL("Convert instruction request failed.");
-	}
-
-	if (mem_idx != 0)
-	{
-		assembler_->PrintInstruction(inst);
-		WARN("Memory operand not at first.");
-	}
-
-	req.operands[mem_idx].type = ZYDIS_OPERAND_TYPE_MEMORY;
-
-	memset(&(req.operands[mem_idx].mem), 0, sizeof(req.operands[mem_idx].mem));
-	req.operands[mem_idx].mem.base = ZYDIS_REGISTER_RSP;
-	req.operands[mem_idx].mem.size = operand_width;
-	
-	ZyanU8    encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
-	ZyanUSize encoded_length = sizeof(encoded_instruction);
-	if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(
-			&req, encoded_instruction, &encoded_length)))
-	{
-		FATAL("Encode instruction failed.");
-	}
-	a.db(encoded_instruction, encoded_length);
-
-	if (operand_width > sizeof(size_t))
-	{
-		a.lea(r9, ptr [rsp]);
-	}
-	else
-	{
-		a.mov(r9, ptr [rsp]);
-	}
-	
-}
-
-void X86MemoryMonitor::AllocAlignStackFix(Xbyak::CodeGenerator& a,
-										  size_t                rsp_position,
-										  size_t                size,
-										  size_t                alignment)
-{
-	using namespace Xbyak::util;
-
-	size_t align_value = ~(alignment - 1);
-	// save current buffer position
-	size_t old_position = a.getSize();
-	// fix stack offset and alignment at rsp_position.
-	a.setSize(rsp_position);
-
-	a.sub(rsp, size);
-	a.and_(rsp, align_value);
-
-	// note:
-	// the size of following 'sub' together 'and' instruction
-	// must be equal to the old instruction,
-	// or there will be instructions overwritten.
-	size_t new_size = a.getSize() - rsp_position;
-	assert(new_size == 8);
-
-	// recover buffer position
-	a.setSize(old_position);
-}
-
-void X86MemoryMonitor::EmitModRmWriteValue(
-	const Instruction&    inst,
-	Xbyak::CodeGenerator& a,
-	size_t                rsp_position)
-{
-	const auto& zinst = inst.zinst.instruction;
-	switch (zinst.operand_count_visible)
-	{
-	case 1:
-		GenerateModRmWriteValue1Operand(inst, a, rsp_position);
-		break;
-	case 2:
-		GenerateModRmWriteValue2Operands(inst, a, rsp_position);
-		break;
-	case 3:
-		GenerateModRmWriteValue3Operands(inst, a, rsp_position);
-		break;
-	default:
-		GenerateModRmWriteValueUsingStack(inst, a, rsp_position);
-		break;
-	}
-}
-
 void X86MemoryMonitor::EmitGetMemoryAddress(
 	const Instruction&         inst,
 	Xbyak::CodeGenerator&      a,
 	const ZydisDecodedOperand* mem_operand,
 	ZydisRegister              dst)
 {
+	using namespace Xbyak::util;
+
 	const auto& zinst = inst.zinst;
 
 	if (mem_operand->type != ZYDIS_OPERAND_TYPE_MEMORY)
@@ -325,13 +62,7 @@ void X86MemoryMonitor::EmitGetMemoryAddress(
 	{
 		if (mem_operand->mem.type != ZYDIS_MEMOP_TYPE_VSIB)
 		{
-			// lea rdx, [mem]
-			uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
-			size_t  encoded_length = sizeof(encoded_instruction);
-			encoded_length         = LeaReg(zinst.instruction.machine_mode, dst,
-                                    *mem_operand, zinst.instruction.address_width,
-                                    encoded_instruction, encoded_length);
-			a.db(encoded_instruction, encoded_length);
+			EmitGetMemoryAddressNormal(inst, a, mem_operand, dst);
 		}
 		else
 		{
@@ -360,6 +91,41 @@ void X86MemoryMonitor::EmitGetMemoryAddress(
 		}
 		a.mov(ZydisRegToXbyakReg(dst), abs_address);
 	}
+}
+
+void X86MemoryMonitor::EmitGetMemoryAddressNormal(
+	const Instruction& inst, Xbyak::CodeGenerator& a, const ZydisDecodedOperand* mem_operand, ZydisRegister dst)
+{
+	using namespace Xbyak::util;
+
+	const auto&         zinst   = inst.zinst;
+	bool                is_xlat = false;
+	ZydisDecodedOperand mem_op  = *mem_operand;
+	if (zinst.instruction.mnemonic == ZYDIS_MNEMONIC_XLAT)
+	{
+		is_xlat = true;
+
+		if (dst != ZYDIS_REGISTER_RAX)
+		{
+			a.push(rax);
+		}
+
+		a.movzx(rax, al);
+		mem_op.mem.index = ZYDIS_REGISTER_RAX;
+	}
+
+	// lea rdx, [mem]
+	uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+	size_t  encoded_length = sizeof(encoded_instruction);
+	encoded_length         = LeaReg(zinst.instruction.machine_mode, dst,
+                            mem_op, zinst.instruction.address_width,
+                            encoded_instruction, encoded_length);
+
+	if (is_xlat && dst != ZYDIS_REGISTER_RAX)
+	{
+		a.pop(rax);
+	}
+	a.db(encoded_instruction, encoded_length);
 }
 
 void X86MemoryMonitor::EmitGetMemoryAddressVSIB(
@@ -579,8 +345,10 @@ InstructionResult X86MemoryMonitor::EmitMemoryAccess(
 	}
 	else
 	{
-		EmitStringOp(inst, a);
+		action = EmitStringOp(inst, a);
 	}
+	
+	return action;
 }
 
 void X86MemoryMonitor::EmitMemoryCallback(
@@ -689,7 +457,7 @@ InstructionResult X86MemoryMonitor::InstrumentInstruction(
 		auto& a = *code_generator;
 
 		// generate call
-		EmitMemoryAccess(inst, a);
+		action = EmitMemoryAccess(inst, a);
 
 		a.ready();
 		WriteCode(module, (void*)a.getCode(), a.getSize());
