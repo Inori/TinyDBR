@@ -22,11 +22,13 @@ public:
 protected:
 	// These functions will be called from generated assemble code.
 
-	// modrm memory read
+	// memory read
+	// this will be called before the read instruction
 	void OnMemoryRead(void* address, size_t size);
 
-	// modrm memory write
-	void OnMemoryWrite(void* address, size_t size, size_t value);
+	// memory write
+	// this will be called after the write instruction
+	void OnMemoryWrite(void* address, size_t size);
 
 	// [rep ...] movs ...
 	void OnStringMov(void* dst, void* src, size_t size);

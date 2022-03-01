@@ -16,23 +16,57 @@ limitations under the License.
 
 #include "common.h"
 #include "x86_helpers.h"
+#include <set>
 
-ZydisRegister GetUnusedRegister(ZydisRegister used_register, int operand_width)
+ZydisRegister GetFreeRegister(
+	const ZydisDecodedInstruction& inst,
+	const ZydisDecodedOperand*     operands)
 {
-	switch (operand_width)
+	std::set<ZydisRegister> available_registers = 
 	{
-	case 16:
-		if (used_register == ZYDIS_REGISTER_AX) return ZYDIS_REGISTER_CX;
-		return ZYDIS_REGISTER_AX;
-	case 32:
-		if (used_register == ZYDIS_REGISTER_EAX) return ZYDIS_REGISTER_ECX;
-		return ZYDIS_REGISTER_EAX;
-	case 64:
-		if (used_register == ZYDIS_REGISTER_RAX) return ZYDIS_REGISTER_RCX;
-		return ZYDIS_REGISTER_RAX;
-	default:
-		FATAL("Unexpected operand width");
+		ZYDIS_REGISTER_R10,
+		ZYDIS_REGISTER_R11,
+		ZYDIS_REGISTER_R12,
+		ZYDIS_REGISTER_R13,
+		ZYDIS_REGISTER_R14,
+		ZYDIS_REGISTER_R15
+	};
+
+	// including the hidden operands
+	for (size_t i = 0; i != inst.operand_count; ++i)
+	{
+		const auto& operand = operands[i];
+		switch (operand.type)
+		{
+		case ZYDIS_OPERAND_TYPE_REGISTER:
+		{
+			available_registers.erase(operand.reg.value);
+		}
+			break;
+		case ZYDIS_OPERAND_TYPE_MEMORY:
+		{
+			available_registers.erase(operand.mem.base);
+			available_registers.erase(operand.mem.index);
+			available_registers.erase(operand.mem.segment);
+		}
+			break;
+		case ZYDIS_OPERAND_TYPE_POINTER:
+			FATAL("what's this?");
+			break;
+		case ZYDIS_OPERAND_TYPE_IMMEDIATE:
+			break;
+		default:
+			break;
+		}
 	}
+
+	if (available_registers.empty())
+	{
+		// unlikely
+		FATAL("no free register found.");
+	}
+
+	return *available_registers.cbegin();
 }
 
 ZyanU32 GetRegisterWidth(ZydisRegister reg)

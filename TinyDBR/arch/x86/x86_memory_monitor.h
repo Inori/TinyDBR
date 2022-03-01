@@ -42,33 +42,72 @@ private:
 	InstructionType GetInstructionType(
 		const Instruction& inst);
 
-	void GenerateMemoryCallback(
-		const Instruction&    inst,
-		Xbyak::CodeGenerator& a);
-	void GenerateModRm(
-		const Instruction&    inst,
-		Xbyak::CodeGenerator& a);
-	void GenerateAbsAddr(
-		const Instruction&    inst,
-		Xbyak::CodeGenerator& a);
-	void GenerateXlat(
-		const Instruction&    inst,
-		Xbyak::CodeGenerator& a);
-	void GenerateStringOp(
-		const Instruction&    inst,
+	void EmitSaveContext(Xbyak::CodeGenerator& a);
+	void EmitRestoreContext(Xbyak::CodeGenerator& a);
+
+	void EmitProlog(Xbyak::CodeGenerator& a);
+	void EmitEpilog(Xbyak::CodeGenerator& a);
+
+	InstructionResult EmitMemoryAccess(
+		const Instruction& inst,
 		Xbyak::CodeGenerator& a);
 
-	void GenerateGetMemoryAddress(
+	void EmitMemoryCallback(
+		const Instruction&         inst,
+		Xbyak::CodeGenerator&      a,
+		bool                       is_write,
+		const ZydisDecodedOperand* mem_operand,
+		ZydisRegister              addr_register);
+
+	void EmitGetMemoryAddress(
+		const Instruction&         inst,
+		Xbyak::CodeGenerator&      a,
+		const ZydisDecodedOperand* mem_operand,
+		ZydisRegister              dst);
+
+	void EmitGetMemoryAddressVSIB(
 		const Instruction&    inst,
 		Xbyak::CodeGenerator& a,
 		ZydisRegister         dst);
 
-	void GenerateGetMemoryAddressVSIB(
+	InstructionResult EmitExplicitMemoryAccess(
+		const Instruction& inst,
+		Xbyak::CodeGenerator& a);
+
+	InstructionResult EmitStringOp(
+		const Instruction& inst,
+		Xbyak::CodeGenerator& a);
+
+	InstructionResult EmitXlat(
+		const Instruction& inst,
+		Xbyak::CodeGenerator& a);
+
+	ZydisRegister EmitPreWrite(
+		const Instruction&    inst,
+		Xbyak::CodeGenerator& a);
+	void EmitPostWrite(
 		const Instruction&    inst,
 		Xbyak::CodeGenerator& a,
-		ZydisRegister         dst);
+		ZydisRegister         addr_register);
 
-	void GenerateModRmWriteValue(
+
+
+
+
+
+	void EmitModRm(
+		const Instruction& inst,
+		Xbyak::CodeGenerator& a,
+		MemoryAction action);
+	void EmitAbsAddr(
+		const Instruction& inst,
+		Xbyak::CodeGenerator& a,
+		MemoryAction action);
+
+
+
+
+	void EmitModRmWriteValue(
 		const Instruction&    inst,
 		Xbyak::CodeGenerator& a,
 		size_t                rsp_position);

@@ -285,7 +285,7 @@ void X86MemoryMonitor::AllocAlignStackFix(Xbyak::CodeGenerator& a,
 	a.setSize(old_position);
 }
 
-void X86MemoryMonitor::GenerateModRmWriteValue(
+void X86MemoryMonitor::EmitModRmWriteValue(
 	const Instruction&    inst,
 	Xbyak::CodeGenerator& a,
 	size_t                rsp_position)
@@ -308,29 +308,34 @@ void X86MemoryMonitor::GenerateModRmWriteValue(
 	}
 }
 
-void X86MemoryMonitor::GenerateGetMemoryAddress(
-	const Instruction&    inst,
-	Xbyak::CodeGenerator& a,
-	ZydisRegister         dst)
+void X86MemoryMonitor::EmitGetMemoryAddress(
+	const Instruction&         inst,
+	Xbyak::CodeGenerator&      a,
+	const ZydisDecodedOperand* mem_operand,
+	ZydisRegister              dst)
 {
-	const auto& zinst  = inst.zinst;
-	const auto  mem_op = GetExplicitMemoryOperand(
-		zinst.operands, zinst.instruction.operand_count_visible);
-	if (mem_op->mem.base != ZYDIS_REGISTER_RIP)
+	const auto& zinst = inst.zinst;
+
+	if (mem_operand->type != ZYDIS_OPERAND_TYPE_MEMORY)
 	{
-		if (mem_op->mem.type != ZYDIS_MEMOP_TYPE_VSIB)
+		FATAL("Error operand type.");
+	}
+
+	if (mem_operand->mem.base != ZYDIS_REGISTER_RIP)
+	{
+		if (mem_operand->mem.type != ZYDIS_MEMOP_TYPE_VSIB)
 		{
 			// lea rdx, [mem]
 			uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
 			size_t  encoded_length = sizeof(encoded_instruction);
 			encoded_length         = LeaReg(zinst.instruction.machine_mode, dst,
-											*mem_op, zinst.instruction.address_width,
-											encoded_instruction, encoded_length);
+                                    *mem_operand, zinst.instruction.address_width,
+                                    encoded_instruction, encoded_length);
 			a.db(encoded_instruction, encoded_length);
 		}
 		else
 		{
-			GenerateGetMemoryAddressVSIB(inst, a, dst);
+			EmitGetMemoryAddressVSIB(inst, a, dst);
 		}
 	}
 	else
@@ -346,10 +351,10 @@ void X86MemoryMonitor::GenerateGetMemoryAddress(
 
 		ZyanU64 abs_address = 0;
 		if (ZYAN_FAILED(ZydisCalcAbsoluteAddress(
-			&zinst.instruction,
-			mem_op,
-			inst.address,
-			&abs_address)))
+				&zinst.instruction,
+				mem_operand,
+				inst.address,
+				&abs_address)))
 		{
 			FATAL("Calculate absolute address failed.");
 		}
@@ -357,118 +362,100 @@ void X86MemoryMonitor::GenerateGetMemoryAddress(
 	}
 }
 
-void X86MemoryMonitor::GenerateGetMemoryAddressVSIB(
+void X86MemoryMonitor::EmitGetMemoryAddressVSIB(
 	const Instruction& inst, Xbyak::CodeGenerator& a, ZydisRegister dst)
 {
 }
 
-//mov rbx, [rcx + 0x40]
-//
-//-------------------------------
-// 
-// pushfq
-// pushaq
-//
-// sub rsp, 20
-// and rsp, 0xFFFFFFFFFFFFFFF0
-// mov rcx, this
-// lea rdx, [rcx+0x40]
-// mov r8, 8
-// 
-// --mov r9, rbx--  # for memory write, add this 
-// 
-// mov rax, OnMemoryRead
-// call rax
-// 
-// popaq
-// popfq
-// mov rbx, [rcx + 0x40]
+InstructionResult X86MemoryMonitor::EmitExplicitMemoryAccess(
+	const Instruction& inst, Xbyak::CodeGenerator& a)
+{
+	InstructionResult action = INST_NOTHANDLED;
 
-void X86MemoryMonitor::GenerateModRm(const Instruction& inst, Xbyak::CodeGenerator& a)
+	const auto& zinst   = inst.zinst;
+	const auto  operand = GetExplicitMemoryOperand(
+        zinst.operands, zinst.instruction.operand_count_visible);
+
+	if (operand->actions & ZYDIS_OPERAND_ACTION_MASK_READ)
+	{
+		EmitMemoryCallback(inst, a, false, operand, ZYDIS_REGISTER_NONE);
+
+		// return INST_NOTHANDLED which causes
+		// the original instruction to be appended
+		action = INST_NOTHANDLED;
+	}
+
+	if (operand->actions & ZYDIS_OPERAND_ACTION_MASK_WRITE)
+	{
+		auto addr_reg = EmitPreWrite(inst, a);
+
+		EmitMemoryCallback(inst, a, true, operand, addr_reg);
+
+		EmitPostWrite(inst, a, addr_reg);
+
+		// we've already emit the original instruction in EmitPreWrite
+		// so let tinydbr pass the original instruction.
+		action = INST_HANDLED;
+	}
+
+	return action;
+}
+
+ZydisRegister X86MemoryMonitor::EmitPreWrite(
+	const Instruction& inst, Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
 
-	const auto& zinst = inst.zinst.instruction;
-
-	const auto operand = GetExplicitMemoryOperand(
-		inst.zinst.operands,
-		inst.zinst.instruction.operand_count_visible);
-
-	if (operand->mem.base == ZYDIS_REGISTER_RSP || operand->mem.base == ZYDIS_REGISTER_ESP)
-	{
-		FATAL("Not support rsp/esp modrm.");
-	}
-
-	GenerateGetMemoryAddress(inst, a, ZYDIS_REGISTER_RDX);
-
-	// backup rsp
-	a.mov(rbp, rsp);
+	const auto& zinst    = inst.zinst;
+	auto addr_reg = GetFreeRegister(zinst.instruction, zinst.operands);
 	
-	// in case we need to fix rsp alignment instruction latter.
-	size_t rsp_position = a.getSize();
+	a.push(ZydisRegToXbyakReg(addr_reg));
 
-	// shadow space
-	a.sub(rsp, 0x20);
-	// 16 bytes align
-	a.and_(rsp, static_cast<uint32_t>( ~(16 - 1) ));
+	auto mem_op = GetExplicitMemoryOperand(
+		zinst.operands, zinst.instruction.operand_count_visible);
+	EmitGetMemoryAddress(inst, a, mem_op, addr_reg);
+
+	return addr_reg;
+}
+
+void X86MemoryMonitor::EmitPostWrite(
+	const Instruction& inst, Xbyak::CodeGenerator& a, ZydisRegister addr_register)
+{
+	using namespace Xbyak::util;
+
+	a.pop(ZydisRegToXbyakReg(addr_register));
+}
+
+
+InstructionResult X86MemoryMonitor::EmitXlat(
+	const Instruction& inst, Xbyak::CodeGenerator& a)
+{
+	using namespace Xbyak::util;
+
+	EmitSaveContext(a);
+	
+	EmitGetMemoryAddress(inst, a, 
+		&inst.zinst.operands[0], ZYDIS_REGISTER_RDX);
+
+	EmitProlog(a);
 
 	// mov rcx, this
 	a.mov(rcx, reinterpret_cast<uint64_t>(this));
+	// xlat:
+	// Set AL to memory byte [RBX + unsigned AL].
+	// so the size is always 1 byte
+	a.mov(r8d, 1);
 
-	//if ((operand->actions & ZYDIS_OPERAND_ACTION_CONDREAD) ||
-	//	(operand->actions & ZYDIS_OPERAND_ACTION_CONDWRITE))
-	//{
-	//	assembler_->PrintInstruction(inst);
-	//	FATAL("Not implemented.");
-	//}
-
-	if ((operand->actions & ZYDIS_OPERAND_ACTION_CONDREAD))
-	{
-		assembler_->PrintInstruction(inst);
-		FATAL("Not implemented.");
-	}
-
-	// mov r8d, size
-	uint32_t mem_size = operand->size / 8;
-	a.mov(r8d, mem_size);
-
-	uint64_t callback = 0;
-	if (operand->actions & ZYDIS_OPERAND_ACTION_READ)
-	{
-		auto func = decltype(&X86MemoryMonitor::OnMemoryRead)(&X86MemoryMonitor::OnMemoryRead);
-		callback  = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(func));
-	}
-	else
-	{
-		auto func = decltype(&X86MemoryMonitor::OnMemoryWrite)(&X86MemoryMonitor::OnMemoryWrite);
-		callback  = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(func));
-
-		GenerateModRmWriteValue(inst, a, rsp_position);
-	}
-
+	auto func = decltype(&X86MemoryMonitor::OnMemoryRead)(&X86MemoryMonitor::OnMemoryRead);
+	uint64_t callback  = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(func));
+	// now the parameters are all ready
+	// call the memory access callback
 	a.mov(rax, callback);
 	a.call(rax);
-	a.mov(rsp, rbp);
-}
 
-void X86MemoryMonitor::GenerateAbsAddr(const Instruction& inst, Xbyak::CodeGenerator& a)
-{
-	using namespace Xbyak::util;
-
-	const auto operand = GetExplicitMemoryOperand(
-		inst.zinst.operands,
-		inst.zinst.instruction.operand_count_visible);
-
-	if (!operand || !operand->mem.disp.has_displacement)
-	{
-		FATAL("No memory operand found.");
-	}
-	
-	a.mov(rdx, operand->mem.disp.value);
-}
-
-void X86MemoryMonitor::GenerateXlat(const Instruction& inst, Xbyak::CodeGenerator& a)
-{
+	EmitEpilog(a);
+	EmitRestoreContext(a);
+	return INST_NOTHANDLED;
 }
 
 // rep movsd
@@ -500,9 +487,11 @@ void X86MemoryMonitor::GenerateXlat(const Instruction& inst, Xbyak::CodeGenerato
 // popaq
 // popfq
 // rep movsd
-void X86MemoryMonitor::GenerateStringOp(const Instruction& inst, Xbyak::CodeGenerator& a)
+InstructionResult X86MemoryMonitor::EmitStringOp(const Instruction& inst, Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
+
+	InstructionResult action = INST_NOTHANDLED;
 
 	const auto& zinst = inst.zinst.instruction;
 	Xbyak::Label label_positive;
@@ -567,29 +556,120 @@ a.L(label_positive);
 	a.mov(rax, callback);
 	a.call(rax);
 	a.mov(rsp, rbp);
+
+	return action;
 }
 
-void X86MemoryMonitor::GenerateMemoryCallback(const Instruction& inst, Xbyak::CodeGenerator& a)
+InstructionResult X86MemoryMonitor::EmitMemoryAccess(
+	const Instruction& inst, Xbyak::CodeGenerator& a)
 {
+	InstructionResult action = INST_NOTHANDLED;
+
 	auto type = GetInstructionType(inst);
-	switch (type)
+	if (type != InstructionType::StringOp)
 	{
-	case InstructionType::ModRm:
-		GenerateModRm(inst, a);
-		break;
-	case InstructionType::AbsAddr:
-		GenerateAbsAddr(inst, a);
-		break;
-	case InstructionType::Xlat:
-		GenerateXlat(inst, a);
-		break;
-	case InstructionType::StringOp:
-		GenerateStringOp(inst, a);
-		break;
-	default:
-		FATAL("Unknown instruction type.");
-		break;
+		if (type != InstructionType::Xlat)
+		{
+			action = EmitExplicitMemoryAccess(inst, a);
+		}
+		else
+		{
+			action = EmitXlat(inst, a);
+		}
 	}
+	else
+	{
+		EmitStringOp(inst, a);
+	}
+}
+
+void X86MemoryMonitor::EmitMemoryCallback(
+	const Instruction&         inst,
+	Xbyak::CodeGenerator&      a,
+	bool                       is_write,
+	const ZydisDecodedOperand* mem_operand,
+	ZydisRegister              addr_register)
+{
+	using namespace Xbyak::util;
+
+	EmitSaveContext(a);
+
+	uint64_t callback = 0;
+	if (!is_write)
+	{
+		EmitGetMemoryAddress(inst, a, mem_operand, ZYDIS_REGISTER_RDX);
+
+		auto func = decltype(&X86MemoryMonitor::OnMemoryRead)(&X86MemoryMonitor::OnMemoryRead);
+		callback  = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(func));
+	}
+	else
+	{
+		a.mov(rdx, ZydisRegToXbyakReg(addr_register));
+
+		auto func = decltype(&X86MemoryMonitor::OnMemoryWrite)(&X86MemoryMonitor::OnMemoryWrite);
+		callback  = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(func));
+	}
+
+	EmitProlog(a);
+
+	// mov rcx, this
+	a.mov(rcx, reinterpret_cast<uint64_t>(this));
+	// mov r8d, size
+	uint32_t mem_size = mem_operand->size / 8;
+	a.mov(r8d, mem_size);
+
+	// now the parameters are all ready
+	// call the memory access callback
+	a.mov(rax, callback);
+	a.call(rax);
+
+	EmitEpilog(a);
+	EmitRestoreContext(a);
+}
+
+// TODO:
+// we may need to save/restore xmm registers also.
+// 
+// pushfq
+// pushaq
+void X86MemoryMonitor::EmitSaveContext(Xbyak::CodeGenerator& a)
+{
+	a.pushfq();
+	uint8_t encoded_instruction[32] = { 0 };
+	size_t  encoded_length          = Pushaq(
+        ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
+	a.db(encoded_instruction, encoded_length);
+}
+
+// popaq
+// popfq
+void X86MemoryMonitor::EmitRestoreContext(Xbyak::CodeGenerator& a)
+{
+	uint8_t encoded_instruction[32] = { 0 };
+	size_t  encoded_length          = Popaq(
+        ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
+	a.db(encoded_instruction, encoded_length);
+	a.popfq();
+}
+
+void X86MemoryMonitor::EmitProlog(Xbyak::CodeGenerator& a)
+{
+	using namespace Xbyak::util;
+
+	// backup rsp
+	a.mov(rbp, rsp);
+	// shadow space
+	a.sub(rsp, ShadowSpaceSize);
+	// 16 bytes align
+	a.and_(rsp, static_cast<uint32_t>(~(16 - 1)));
+}
+
+void X86MemoryMonitor::EmitEpilog(Xbyak::CodeGenerator& a)
+{
+	using namespace Xbyak::util;
+
+	// restore rsp
+	a.mov(rsp, rbp);
 }
 
 InstructionResult X86MemoryMonitor::InstrumentInstruction(
@@ -608,34 +688,14 @@ InstructionResult X86MemoryMonitor::InstrumentInstruction(
 
 		auto& a = *code_generator;
 
-		// TODO:
-		// we may need to save/restore xmm registers also.
-
-		a.pushfq();
-		// pushaq
-		uint8_t encoded_instruction[32] = { 0 };
-		size_t  encoded_length          = Pushaq(
-            ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
-		a.db(encoded_instruction, encoded_length);
-
 		// generate call
-		GenerateMemoryCallback(inst, a);
-	
-		// popaq
-		encoded_length = Popaq(
-			ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
-		a.db(encoded_instruction, encoded_length);
-
-		a.popfq();
+		EmitMemoryAccess(inst, a);
 
 		a.ready();
 		WriteCode(module, (void*)a.getCode(), a.getSize());
 
 		a.reset();
 
-		// return INST_NOTHANDLED which causes
-		// the original instruction to be appended
-		action = INST_NOTHANDLED;
 	} while (false);
 	return action;
 }
@@ -645,16 +705,17 @@ bool X86MemoryMonitor::NeedToHandle(Instruction& inst)
 	bool need_handle = false;
 	do
 	{
-		const auto& zinst             = inst.zinst;
-		size_t      mem_operand_count = GetExplicitMemoryOperandCount(
-            zinst.operands, zinst.instruction.operand_count_visible);
+		const auto& zinst    = inst.zinst;
+		const auto  category = zinst.instruction.meta.category;
 
-		if (mem_operand_count == 0)
+		const auto operand = GetExplicitMemoryOperand(
+			zinst.operands, zinst.instruction.operand_count_visible);
+
+		if (!operand && category != ZYDIS_CATEGORY_STRINGOP)
 		{
 			break;
 		}
 
-		auto category = zinst.instruction.meta.category;
 		if (m_flags & MonitorFlag::IgnoreCode)
 		{
 			if (category == ZYDIS_CATEGORY_CALL || category == ZYDIS_CATEGORY_UNCOND_BR)
@@ -682,10 +743,10 @@ bool X86MemoryMonitor::NeedToHandle(Instruction& inst)
 		{
 			break;
 		}
-	
-		const auto& operand = GetExplicitMemoryOperand(
-			zinst.operands, zinst.instruction.operand_count_visible);
-		if (operand.mem.segment == ZYDIS_REGISTER_GS || operand.mem.segment == ZYDIS_REGISTER_FS)
+
+		// TODO:
+		// Support fs and gs segment memory.
+		if (operand->mem.segment == ZYDIS_REGISTER_GS || operand->mem.segment == ZYDIS_REGISTER_FS)
 		{
 			break;
 		}
@@ -694,3 +755,4 @@ bool X86MemoryMonitor::NeedToHandle(Instruction& inst)
 	}while(false);
 	return need_handle;
 }
+

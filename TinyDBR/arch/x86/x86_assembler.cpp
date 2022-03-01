@@ -186,12 +186,11 @@ bool X86Assembler::IsRipRelative(ModuleInfo*  module,
 		return false;
     }
 
-	int64_t disp = zinst.instruction.raw.disp.value;
-
 	if (mem_address)
 	{
-		size_t instruction_size = zinst.instruction.length;
-		*mem_address            = (size_t)(instruction_address + instruction_size + disp);
+		int64_t disp             = zinst.instruction.raw.disp.value;
+		size_t  instruction_size = zinst.instruction.length;
+		*mem_address             = (size_t)(instruction_address + instruction_size + disp);
 	}
 
 	return rip_relative;

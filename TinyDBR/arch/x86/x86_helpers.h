@@ -24,7 +24,9 @@ limitations under the License.
 
 ZyanU32       GetRegisterWidth(ZydisRegister reg);
 ZydisRegister GetFullSizeRegister(ZydisRegister reg, int child_ptr_size);
-ZydisRegister GetUnusedRegister(ZydisRegister used_register, int operand_width);
+ZydisRegister GetFreeRegister(
+    const ZydisDecodedInstruction& inst, 
+    const ZydisDecodedOperand* operands);
 ZydisRegister GetLow8BitRegister(ZydisRegister reg);
 ZydisRegister GetNBitRegister(ZydisRegister reg, size_t nbits);
 bool          IsGeneralPurposeRegister(ZydisRegister reg);
