@@ -100,6 +100,9 @@ pop r15
 
 rep movsd
 ==================
+
+
+
 pushfq
 pushaq
 mov rbp, rsp
@@ -107,28 +110,69 @@ mov rbp, rsp
 sub rsp, 0x20
 and rsp, 0xFFFFFFFFFFFFFFF0
 
-shl rcx, 2          # 1 for w, 2 for d, 3 for q
-mov r9, rcx
-mov rcx, this
+mov r15, rcx
+shl r15, 2          # 1 for w, 2 for d, 3 for q
+
 
 pushfq
 pop rax
-bt rax, 0x0A     # DF
+bt rax, 0x0A        # DF
 jnc label           # if CF=0
 
-sub rdi, r9
-sub rsi, r9
+sub rsi, r15
 
 label:
 
-mov rdx, rdi
-mov r8, rsi
-mov rax, OnStringMov
+mov rcx, this
+mov rdx, rsi
+mov r8, r15
+mov rax, OnMemoryRead
 call rax
 
 mov rsp, rbp
 popaq
 popfq
+
+
+
+push r15
+mov r15, rcx
 rep movsd
+
+
+
+pushfq
+pushaq
+mov rbp, rsp
+
+sub rsp, 0x20
+and rsp, 0xFFFFFFFFFFFFFFF0
+
+sub r15, rcx
+shl r15, 2          # 1 for w, 2 for d, 3 for q
+
+pushfq
+pop rax
+bt rax, 0x0A        # DF
+jc label           # if CF=1
+
+sub rdi, r15
+
+label:
+
+mov rcx, this
+mov rdx, rdi
+mov r8, r15
+mov rax, OnMemoryWrite
+call rax
+
+mov rsp, rbp
+popaq
+popfq
+pop r15
+
+
+
+
 
       

@@ -30,15 +30,6 @@ protected:
 	// this will be called after the write instruction
 	void OnMemoryWrite(void* address, size_t size);
 
-	// [rep ...] movs ...
-	void OnStringMov(void* dst, void* src, size_t size);
-
-	// [rep ...] lods ... , scas ... , cmps ...
-	void OnStringRead(void* address, size_t size);
-
-	// [rep ...] stos ...
-	void OnStringWrite(void* address, size_t size, size_t value);
-
 protected:
 	MonitorFlags m_flags = 0;
 };

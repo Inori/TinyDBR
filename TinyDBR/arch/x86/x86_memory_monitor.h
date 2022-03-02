@@ -96,6 +96,17 @@ private:
 		Xbyak::CodeGenerator& a,
 		ZydisRegister         addr_register);
 
+	void EmitStringRead(
+		const Instruction&                inst,
+		Xbyak::CodeGenerator&             a,
+		const std::vector<ZydisRegister>& src_reg_list);
+
+	void EmitStringWrite(
+		const Instruction&    inst,
+		Xbyak::CodeGenerator& a);
+
+
+
 private:
 	std::array<uint8_t, TempCodeSize>     code_buffer;
 	std::unique_ptr<Xbyak::CodeGenerator> code_generator;

@@ -204,6 +204,10 @@ bool X86Assembler::IsRspRelative(Instruction& inst,
 {
 	bool rsp_relative = false;
 	auto operand      = FindExplicitMemoryOperand(inst);
+	if (!operand)
+	{
+		return rsp_relative;
+	}
 
 	if (operand->mem.base == ZYDIS_REGISTER_SP ||
 		operand->mem.base == ZYDIS_REGISTER_ESP ||

@@ -17,15 +17,3 @@ void MemoryMonitor::OnMemoryRead(void* address, size_t size)
 void MemoryMonitor::OnMemoryWrite(void* address, size_t size)
 {
 }
-
-void MemoryMonitor::OnStringMov(void* dst, void* src, size_t size)
-{
-}
-
-void MemoryMonitor::OnStringRead(void* address, size_t size)
-{
-}
-
-void MemoryMonitor::OnStringWrite(void* address, size_t size, size_t value)
-{
-}

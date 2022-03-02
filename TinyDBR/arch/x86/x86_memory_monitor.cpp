@@ -181,6 +181,9 @@ ZydisRegister X86MemoryMonitor::EmitPreWrite(
 		zinst.operands, zinst.instruction.operand_count_visible);
 	EmitGetMemoryAddress(inst, a, mem_op, addr_reg);
 
+	// insert original instruction
+	a.db(reinterpret_cast<const uint8_t*>(inst.address), inst.length);
+
 	return addr_reg;
 }
 
@@ -191,7 +194,6 @@ void X86MemoryMonitor::EmitPostWrite(
 
 	a.pop(ZydisRegToXbyakReg(addr_register));
 }
-
 
 InstructionResult X86MemoryMonitor::EmitXlat(
 	const Instruction& inst, Xbyak::CodeGenerator& a)
@@ -224,35 +226,114 @@ InstructionResult X86MemoryMonitor::EmitXlat(
 	return INST_NOTHANDLED;
 }
 
-// rep movsd
-// ==================
-// pushfq
-// pushaq
-// sub rsp, 20
-// and rsp, 0xFFFFFFFFFFFFFFF0
-//
-// shl rcx, 2          # 1 for w, 2 for d, 3 for q
-// mov r9, rcx
-// mov rcx, this
-//
-// pushfq
-// pop rax
-// bt rax, 0x0A        # DF
-// jnc label           # if CF=0
-//
-// sub rdi, r9
-// sub rsi, r9
-//
-// label:
-//
-// mov rdx, rdi
-// mov r8, rsi
-// mov rax, OnStringMov
-// call rax
-//
-// popaq
-// popfq
-// rep movsd
+
+void X86MemoryMonitor::EmitStringRead(
+	const Instruction& inst, Xbyak::CodeGenerator& a, 
+	const std::vector<ZydisRegister>& src_reg_list)
+{
+	using namespace Xbyak::util;
+	const auto& zinst = inst.zinst;
+	Xbyak::Label label;
+
+	EmitSaveContext(a);
+	EmitProlog(a);
+
+	// size in bytes
+	uint8_t operand_size = zinst.instruction.operand_width / 8;
+
+	if (zinst.instruction.attributes & ZYDIS_ATTRIB_HAS_REP ||
+		zinst.instruction.attributes & ZYDIS_ATTRIB_HAS_REPE ||
+		zinst.instruction.attributes & ZYDIS_ATTRIB_HAS_REPNE)
+	{
+		a.mov(r15, rcx);
+
+		if (operand_size != 1)
+		{
+			const uint8_t shift_table[] = { 0, 0, 1, 0, 2, 0, 0, 0, 3 };
+			const uint8_t shift_bits    = shift_table[operand_size];
+			a.shl(r15, shift_bits);
+		}
+	}
+	else
+	{
+		a.mov(r15, operand_size);
+	}
+	
+	auto     func     = decltype(&X86MemoryMonitor::OnMemoryRead)(&X86MemoryMonitor::OnMemoryRead);
+	uint64_t callback = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(func));
+
+	a.pushfq();
+	a.pop(rax);
+	a.bt(rax, 0x0A);
+	a.jnc(label);
+	for (const auto& src_reg : src_reg_list)
+	{
+		a.sub(ZydisRegToXbyakReg(src_reg), r15);
+	}
+a.L(label);
+	for (const auto& src_reg : src_reg_list)
+	{
+		a.mov(rcx, reinterpret_cast<uint64_t>(this));
+		a.mov(rdx, ZydisRegToXbyakReg(src_reg));
+		a.mov(r8, r15);  // r15 is nonvolatile register
+		a.mov(rax, callback);
+		a.call(rax);
+	}
+
+	EmitEpilog(a);
+	EmitRestoreContext(a);
+}
+
+void X86MemoryMonitor::EmitStringWrite(
+	const Instruction& inst, Xbyak::CodeGenerator& a)
+{
+	using namespace Xbyak::util;
+	const auto&  zinst = inst.zinst;
+	Xbyak::Label label;
+
+	EmitSaveContext(a);
+	EmitProlog(a);
+
+	// size in bytes
+	uint8_t operand_size = zinst.instruction.operand_width / 8;
+
+	if (zinst.instruction.attributes & ZYDIS_ATTRIB_HAS_REP ||
+		zinst.instruction.attributes & ZYDIS_ATTRIB_HAS_REPE ||
+		zinst.instruction.attributes & ZYDIS_ATTRIB_HAS_REPNE)
+	{
+		a.mov(r15, rcx);
+
+		if (operand_size != 1)
+		{
+			const uint8_t shift_table[] = { 0, 0, 1, 0, 2, 0, 0, 0, 3 };
+			const uint8_t shift_bits    = shift_table[operand_size];
+			a.shl(r15, shift_bits);
+		}
+	}
+	else
+	{
+		a.mov(r15, operand_size);
+	}
+
+	auto     func     = decltype(&X86MemoryMonitor::OnMemoryWrite)(&X86MemoryMonitor::OnMemoryWrite);
+	uint64_t callback = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(func));
+
+	a.pushfq();
+	a.pop(rax);
+	a.bt(rax, 0x0A);
+	a.jc(label);
+	a.sub(rdi, r15);  // for string write, destination register must be rdi
+a.L(label);
+	a.mov(rcx, reinterpret_cast<uint64_t>(this));
+	a.mov(rdx, rdi);
+	a.mov(r8, r15);
+	a.mov(rax, callback);
+	a.call(rax);
+
+	EmitEpilog(a);
+	EmitRestoreContext(a);
+}
+
 InstructionResult X86MemoryMonitor::EmitStringOp(const Instruction& inst, Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
@@ -260,8 +341,6 @@ InstructionResult X86MemoryMonitor::EmitStringOp(const Instruction& inst, Xbyak:
 	InstructionResult action = INST_NOTHANDLED;
 
 	const auto& zinst = inst.zinst.instruction;
-	Xbyak::Label label_positive;
-
 	// In 64-bit mode, if 67H is used to override address size attribute,
 	// the count register is ECX and any implicit source/destination operand will
 	// use the corresponding 32-bit index register.
@@ -271,57 +350,40 @@ InstructionResult X86MemoryMonitor::EmitStringOp(const Instruction& inst, Xbyak:
 		FATAL("Not support 32-bit string instruction yet.");
 	}
 
-	if (zinst.mnemonic != ZYDIS_MNEMONIC_MOVSB &&
-		zinst.mnemonic != ZYDIS_MNEMONIC_MOVSW &&
-		zinst.mnemonic != ZYDIS_MNEMONIC_MOVSD &&
-		zinst.mnemonic != ZYDIS_MNEMONIC_MOVSQ)
+	bool                       has_write = false;
+	std::vector<ZydisRegister> src_regs;
+	for (size_t i = 0; i != zinst.operand_count; ++i)
 	{
-		FATAL("Not supported yet.");
-	}
-
-	a.mov(rbp, rsp);
-	// shadow space
-	a.sub(rsp, 0x20);
-	// 16 bytes align
-	a.and_(rsp, static_cast<uint32_t>(~(16 - 1)));
-
-	// in bytes
-	uint8_t operand_size = zinst.operand_width / 8;
-	if (zinst.attributes & ZYDIS_ATTRIB_HAS_REP)
-	{
-		if (operand_size != 1)
+		auto& operand = inst.zinst.operands[i];
+		if ((operand.type == ZYDIS_OPERAND_TYPE_MEMORY) &&
+			(operand.actions & ZYDIS_OPERAND_ACTION_MASK_READ))
 		{
-			// shl rcx, n
-			const uint8_t shift_table[] = { 0, 0, 1, 0, 2, 0, 0, 0, 3 };
-			const uint8_t shift_bits    = shift_table[operand_size];
-			a.shl(rcx, shift_bits);
+			src_regs.push_back(operand.mem.base);
 		}
 
-		a.mov(r9, rcx);
+		if (operand.actions & ZYDIS_OPERAND_ACTION_MASK_WRITE)
+		{
+			has_write = true;
+		}
 	}
-	else
+
+	if (!src_regs.empty())
 	{
-		a.mov(r9d, operand_size);
+		EmitStringRead(inst, a, src_regs);
 	}
 
-	a.mov(rcx, reinterpret_cast<uint64_t>(this));
+	if (has_write)
+	{
+		a.push(r15);
+		a.mov(r15, rcx);
+		a.db(reinterpret_cast<const uint8_t*>(inst.address), inst.length);
 
-	a.pushfq();
-	a.pop(rax);
-	a.bt(rax, 0x0A);
-	a.jnc(label_positive);
-	a.sub(rdi, r9);
-	a.sub(rsi, r9);
-a.L(label_positive);
-	a.mov(rdx, rdi);
-	a.mov(r8, rsi);
+		EmitStringWrite(inst, a);
 
-	auto     func     = decltype(&X86MemoryMonitor::OnStringMov)(&X86MemoryMonitor::OnStringMov);
-	uint64_t callback = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(func));
+		a.pop(r15);
 
-	a.mov(rax, callback);
-	a.call(rax);
-	a.mov(rsp, rbp);
+		action = INST_HANDLED;
+	}
 
 	return action;
 }
@@ -456,8 +518,16 @@ InstructionResult X86MemoryMonitor::InstrumentInstruction(
 
 		auto& a = *code_generator;
 
+		static size_t number = 0;
 		// generate call
 		action = EmitMemoryAccess(inst, a);
+
+		if (number == 25544)
+		{
+			//__debugbreak();
+		}
+		//printf("%d\n", number);
+		++number;
 
 		a.ready();
 		WriteCode(module, (void*)a.getCode(), a.getSize());
@@ -514,7 +584,8 @@ bool X86MemoryMonitor::NeedToHandle(Instruction& inst)
 
 		// TODO:
 		// Support fs and gs segment memory.
-		if (operand->mem.segment == ZYDIS_REGISTER_GS || operand->mem.segment == ZYDIS_REGISTER_FS)
+		if (operand != nullptr && 
+			(operand->mem.segment == ZYDIS_REGISTER_GS || operand->mem.segment == ZYDIS_REGISTER_FS))
 		{
 			break;
 		}
