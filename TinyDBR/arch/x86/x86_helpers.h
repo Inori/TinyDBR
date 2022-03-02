@@ -23,7 +23,8 @@ limitations under the License.
 
 
 ZyanU32       GetRegisterWidth(ZydisRegister reg);
-ZydisRegister GetFullSizeRegister(ZydisRegister reg, int child_ptr_size);
+ZydisRegister GetFullSizeRegister(
+    ZydisRegister reg, int child_ptr_size = sizeof(void*));
 ZydisRegister GetFreeRegister(
     const ZydisDecodedInstruction& inst, 
     const ZydisDecodedOperand* operands);

@@ -156,7 +156,7 @@ InstructionResult X86MemoryMonitor::EmitExplicitMemoryAccess(
 		auto addr_reg = EmitPreWrite(inst, a);
 
 		EmitMemoryCallback(inst, a, true, operand, addr_reg);
-
+	
 		EmitPostWrite(inst, a, addr_reg);
 
 		// we've already emit the original instruction in EmitPreWrite
@@ -172,7 +172,7 @@ ZydisRegister X86MemoryMonitor::EmitPreWrite(
 {
 	using namespace Xbyak::util;
 
-	const auto& zinst    = inst.zinst;
+	const auto& zinst = inst.zinst;
 	auto addr_reg = GetFreeRegister(zinst.instruction, zinst.operands);
 	
 	a.push(ZydisRegToXbyakReg(addr_reg));
@@ -518,20 +518,14 @@ InstructionResult X86MemoryMonitor::InstrumentInstruction(
 
 		auto& a = *code_generator;
 
-		static size_t number = 0;
 		// generate call
 		action = EmitMemoryAccess(inst, a);
 
-		if (number == 25544)
-		{
-			//__debugbreak();
-		}
-		//printf("%d\n", number);
-		++number;
-
 		a.ready();
-		WriteCode(module, (void*)a.getCode(), a.getSize());
-
+		if (a.getSize() != 0)
+		{
+			WriteCode(module, (void*)a.getCode(), a.getSize());
+		}
 		a.reset();
 
 	} while (false);

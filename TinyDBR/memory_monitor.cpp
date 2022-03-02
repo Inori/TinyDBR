@@ -13,7 +13,6 @@ void MemoryMonitor::OnMemoryRead(void* address, size_t size)
 {
 }
 
-// when size >= 16, value is the memory address
 void MemoryMonitor::OnMemoryWrite(void* address, size_t size)
 {
 }

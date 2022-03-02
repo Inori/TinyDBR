@@ -40,14 +40,22 @@ ZydisRegister GetFreeRegister(
 		{
 		case ZYDIS_OPERAND_TYPE_REGISTER:
 		{
-			available_registers.erase(operand.reg.value);
+			if (IsGeneralPurposeRegister(operand.reg.value))
+			{
+				available_registers.erase(GetFullSizeRegister(operand.reg.value));
+			}
 		}
 			break;
 		case ZYDIS_OPERAND_TYPE_MEMORY:
 		{
-			available_registers.erase(operand.mem.base);
-			available_registers.erase(operand.mem.index);
-			available_registers.erase(operand.mem.segment);
+			if (IsGeneralPurposeRegister(operand.mem.base))
+			{
+				available_registers.erase(GetFullSizeRegister(operand.mem.base));
+			}
+			if (IsGeneralPurposeRegister(operand.mem.index))
+			{
+				available_registers.erase(GetFullSizeRegister(operand.mem.index));
+			}
 		}
 			break;
 		case ZYDIS_OPERAND_TYPE_POINTER:
@@ -107,6 +115,8 @@ ZydisRegister GetLow8BitRegister(ZydisRegister reg)
 {
 	switch (reg)
 	{
+	case ZYDIS_REGISTER_NONE:
+		return ZYDIS_REGISTER_NONE;
 	case ZYDIS_REGISTER_AL:
 	case ZYDIS_REGISTER_AH:
 	case ZYDIS_REGISTER_AX:
@@ -135,61 +145,73 @@ ZydisRegister GetLow8BitRegister(ZydisRegister reg)
 	case ZYDIS_REGISTER_RBX:
 		return ZYDIS_REGISTER_BL;
 
+	case ZYDIS_REGISTER_SPL:
 	case ZYDIS_REGISTER_SP:
 	case ZYDIS_REGISTER_ESP:
 	case ZYDIS_REGISTER_RSP:
 		return ZYDIS_REGISTER_SPL;
 
+	case ZYDIS_REGISTER_BPL:
 	case ZYDIS_REGISTER_BP:
 	case ZYDIS_REGISTER_EBP:
 	case ZYDIS_REGISTER_RBP:
 		return ZYDIS_REGISTER_BPL;
 
+	case ZYDIS_REGISTER_SIL:
 	case ZYDIS_REGISTER_SI:
 	case ZYDIS_REGISTER_ESI:
 	case ZYDIS_REGISTER_RSI:
 		return ZYDIS_REGISTER_SIL;
 
+	case ZYDIS_REGISTER_DIL:
 	case ZYDIS_REGISTER_DI:
 	case ZYDIS_REGISTER_EDI:
 	case ZYDIS_REGISTER_RDI:
 		return ZYDIS_REGISTER_DIL;
 
+	case ZYDIS_REGISTER_R8B:
 	case ZYDIS_REGISTER_R8W:
 	case ZYDIS_REGISTER_R8D:
 	case ZYDIS_REGISTER_R8:
 		return ZYDIS_REGISTER_R8B;
 
+	case ZYDIS_REGISTER_R9B:
 	case ZYDIS_REGISTER_R9W:
 	case ZYDIS_REGISTER_R9D:
 	case ZYDIS_REGISTER_R9:
 		return ZYDIS_REGISTER_R9B;
 
+	case ZYDIS_REGISTER_R10B:
 	case ZYDIS_REGISTER_R10W:
 	case ZYDIS_REGISTER_R10D:
 	case ZYDIS_REGISTER_R10:
 		return ZYDIS_REGISTER_R10B;
 
+	case ZYDIS_REGISTER_R11B:
 	case ZYDIS_REGISTER_R11W:
 	case ZYDIS_REGISTER_R11D:
 	case ZYDIS_REGISTER_R11:
 		return ZYDIS_REGISTER_R11B;
 
+	case ZYDIS_REGISTER_R12B:
 	case ZYDIS_REGISTER_R12W:
 	case ZYDIS_REGISTER_R12D:
 	case ZYDIS_REGISTER_R12:
 		return ZYDIS_REGISTER_R12B;
 
+	case ZYDIS_REGISTER_R13B:
 	case ZYDIS_REGISTER_R13W:
 	case ZYDIS_REGISTER_R13D:
 	case ZYDIS_REGISTER_R13:
 		return ZYDIS_REGISTER_R13B;
 
+	case ZYDIS_REGISTER_R14B:
 	case ZYDIS_REGISTER_R14W:
 	case ZYDIS_REGISTER_R14D:
 	case ZYDIS_REGISTER_R14:
 		return ZYDIS_REGISTER_R14B;
 
+	case ZYDIS_REGISTER_R15B:
 	case ZYDIS_REGISTER_R15W:
 	case ZYDIS_REGISTER_R15D:
 	case ZYDIS_REGISTER_R15:
@@ -205,7 +227,7 @@ ZydisRegister GetNBitRegister(ZydisRegister reg, size_t nbits)
 {
 	ZydisRegister xl = GetLow8BitRegister(reg);
 
-	if (nbits == 8)
+	if (xl == ZYDIS_REGISTER_NONE || nbits == 8)
 	{
 		return xl;
 	}
