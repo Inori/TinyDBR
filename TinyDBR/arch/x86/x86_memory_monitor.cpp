@@ -301,7 +301,7 @@ void X86MemoryMonitor::EmitStringWrite(
 		zinst.instruction.attributes & ZYDIS_ATTRIB_HAS_REPE ||
 		zinst.instruction.attributes & ZYDIS_ATTRIB_HAS_REPNE)
 	{
-		a.mov(r15, rcx);
+		a.sub(r15, rcx);
 
 		if (operand_size != 1)
 		{
@@ -577,7 +577,12 @@ bool X86MemoryMonitor::NeedToHandle(Instruction& inst)
 			break;
 		}
 
-		if (zinst.instruction.mnemonic == ZYDIS_MNEMONIC_LEA)
+		if (operand != nullptr && operand->mem.type == ZYDIS_MEMOP_TYPE_AGEN)
+		{
+			break;
+		}
+
+		if (zinst.instruction.mnemonic == ZYDIS_MNEMONIC_FSETPM287_NOP)
 		{
 			break;
 		}
