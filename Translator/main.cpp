@@ -14,6 +14,29 @@
 std::unique_ptr<Executor> instrumenter;
 
 
+class MyMonitor : public MemoryCallback
+{
+public:
+	MyMonitor()
+	{
+	}
+	virtual ~MyMonitor(){};
+
+	void OnMemoryRead(void* address, size_t size) override
+	{
+		
+	}
+
+	void OnMemoryWrite(void* address, size_t size) override
+	{
+		
+	}
+
+private:
+};
+
+
+
 // For detours inject
 __declspec(dllexport) void WINAPI Dummy()
 {
@@ -47,8 +70,10 @@ void InitRewrite()
 			break;
 		}
 
+		static MyMonitor monitor;
+
 		MonitorFlags flags = IgnoreCode | IgnoreStack | IgnoreRipRelative;
-		instrumenter       = std::make_unique<X86MemoryMonitor>(flags);
+		instrumenter       = std::make_unique<X86MemoryMonitor>(flags, &monitor);
 		//instrumenter = std::make_unique<TinyDBR>();
 
 		TargetModule main_module = {};

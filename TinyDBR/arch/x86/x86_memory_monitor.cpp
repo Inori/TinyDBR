@@ -7,8 +7,8 @@
 #endif
 
 
-X86MemoryMonitor::X86MemoryMonitor(MonitorFlags flags) :
-	MemoryMonitor(flags)
+X86MemoryMonitor::X86MemoryMonitor(MonitorFlags flags, MemoryCallback* callback) :
+	MemoryMonitor(flags, callback)
 {
 	code_generator = std::make_unique<Xbyak::CodeGenerator>(code_buffer.size(), code_buffer.data());
 }

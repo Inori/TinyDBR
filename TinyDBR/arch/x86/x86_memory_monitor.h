@@ -43,7 +43,7 @@ private:
 	constexpr static size_t ZmmRegWidth     = 64;
 
 public:
-	X86MemoryMonitor(MonitorFlags flags);
+	X86MemoryMonitor(MonitorFlags flags, MemoryCallback* callback);
 	virtual ~X86MemoryMonitor();
 
 protected:
