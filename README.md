@@ -22,7 +22,28 @@ But compared to TinyInst, which catch the exception and translate instructions i
 
 Other parts are almost the same as the original TinyInst.
 
+## Memory Monitor
+TinyDBR ships with a memory access monitor which can monitor memory read/write with some limitations(see below).
 
+Users can inherite the `MemoryCallback` class to get notified when memory access happens.
+
+### Limitations
+There are some limitations due to my own usage. 
+
+Basically, what I want is just to monitor heap access, code and stack access is not useful for me, 
+ 
+besides, monitor all of that is too expensive.
+
+1. Code memory is not supported. (e.g. call [mem])
+2. Stack memory is not supported (e.g. mov rax, [rsp - 8])
+3. FS and GS segment access is not supported. (e.g. mov rax, gs:[58])
+4. Conditional read and write are not implemented accurately.
+
+    I removed the condition, which means the callback will always be called no matter the memory referenced is really read/written or not.
+    This reduced the complexity of the implementation. 
+
+    But even with this limitation, it also ensures that, before the memory read
+    we have chance to feed the memory the target may read and, after the memory write, we always get the correct content of the target memory.
 
 ## TODO List:
 1. ~~Refactory the public interface for easy usage.~~ Done.
