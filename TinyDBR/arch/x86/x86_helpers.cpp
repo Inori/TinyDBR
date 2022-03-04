@@ -20,19 +20,28 @@ limitations under the License.
 #include <intrin.h>
 #include <set>
 
-ZydisRegister GetFreeRegister(
+
+bool GetFreeRegister(
 	const ZydisDecodedInstruction& inst,
-	const ZydisDecodedOperand*     operands)
+	const ZydisDecodedOperand*     operands,
+	size_t                         count,
+	std::vector<ZydisRegister>&    reg_list)
 {
+	// these are all nonvolatile registers
+	// which means we don't need to protect 
+	// them before a call instruction
 	std::set<ZydisRegister> available_registers = 
 	{
-		ZYDIS_REGISTER_R10,
-		ZYDIS_REGISTER_R11,
 		ZYDIS_REGISTER_R12,
 		ZYDIS_REGISTER_R13,
 		ZYDIS_REGISTER_R14,
 		ZYDIS_REGISTER_R15
 	};
+
+	if (count > available_registers.size())
+	{
+		return false;
+	}
 
 	// including the hidden operands
 	for (size_t i = 0; i != inst.operand_count; ++i)
@@ -47,7 +56,7 @@ ZydisRegister GetFreeRegister(
 				available_registers.erase(GetFullSizeRegister(operand.reg.value));
 			}
 		}
-			break;
+		break;
 		case ZYDIS_OPERAND_TYPE_MEMORY:
 		{
 			if (IsGeneralPurposeRegister(operand.mem.base))
@@ -59,7 +68,7 @@ ZydisRegister GetFreeRegister(
 				available_registers.erase(GetFullSizeRegister(operand.mem.index));
 			}
 		}
-			break;
+		break;
 		case ZYDIS_OPERAND_TYPE_POINTER:
 			FATAL("what's this?");
 			break;
@@ -76,7 +85,45 @@ ZydisRegister GetFreeRegister(
 		FATAL("no free register found.");
 	}
 
-	return *available_registers.cbegin();
+	reg_list.clear();
+	for (size_t i = 0; i != count; ++i)
+	{
+		if (available_registers.empty())
+		{
+			break;
+		}
+
+		auto reg = *available_registers.cbegin();
+		reg_list.push_back(reg);
+		available_registers.erase(reg);
+	}
+
+	return reg_list.size() == count;
+}
+
+
+ZydisRegister GetFreeRegister(
+	const ZydisDecodedInstruction& inst,
+	const ZydisDecodedOperand*     operands)
+{
+	std::vector<ZydisRegister> reg_list;
+	if (!GetFreeRegister(inst, operands, 1, reg_list))
+	{
+		FATAL("get free register failed.");
+	}
+	return reg_list[0];
+}
+
+std::pair<ZydisRegister, ZydisRegister> 
+GetFreeRegister2(
+	const ZydisDecodedInstruction& inst, const ZydisDecodedOperand* operands)
+{
+	std::vector<ZydisRegister> reg_list;
+	if (!GetFreeRegister(inst, operands, 2, reg_list))
+	{
+		FATAL("get free register failed.");
+	}
+	return std::make_pair(reg_list[0], reg_list[1]);
 }
 
 ZydisRegister GetFreeRegisterSSE(

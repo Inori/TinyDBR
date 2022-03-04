@@ -27,9 +27,17 @@ ZydisRegister GetFullSizeRegister(
     ZydisRegister reg, int child_ptr_size = sizeof(void*));
 ZydisRegister GetReducedVectorRegister(ZydisRegister reg);
 ZydisRegister GetFullSizeVectorRegister(ZydisRegister reg, bool hw_support = true);
+bool          GetFreeRegister(
+			 const ZydisDecodedInstruction& inst,
+			 const ZydisDecodedOperand*     operands,
+			 size_t                         count,
+			 std::vector<ZydisRegister>&    reg_list);
 ZydisRegister GetFreeRegister(
     const ZydisDecodedInstruction& inst, 
     const ZydisDecodedOperand* operands);
+std::pair<ZydisRegister, ZydisRegister> GetFreeRegister2(
+	const ZydisDecodedInstruction& inst,
+	const ZydisDecodedOperand*     operands);
 ZydisRegister GetFreeRegisterSSE(
 	const ZydisDecodedInstruction& inst,
 	const ZydisDecodedOperand*     operands);

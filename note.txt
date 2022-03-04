@@ -175,3 +175,4 @@ pop r15
 
       
 vpgatherdd  ymm19{k1},dword ptr [rax+ymm2]
+62 E2 7D 29 90 1C 10

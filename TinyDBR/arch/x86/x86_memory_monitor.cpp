@@ -25,7 +25,16 @@ X86MemoryMonitor::InstructionType X86MemoryMonitor::GetInstructionType(const Ins
 	const auto      category = zinst.meta.category;
 	const auto      mem_op   = GetExplicitMemoryOperand(inst.zinst.operands, zinst.operand_count_visible);
 
-	if (zinst.attributes & ZYDIS_ATTRIB_HAS_MODRM)
+	// note:
+	// the condition order is important
+	// although it's ugly...
+	if (category == ZYDIS_CATEGORY_AVX2GATHER ||
+		category == ZYDIS_CATEGORY_GATHER ||
+		category == ZYDIS_CATEGORY_SCATTER)
+	{
+		type = InstructionType::GatherScatter;
+	}
+	else if (zinst.attributes & ZYDIS_ATTRIB_HAS_MODRM)
 	{
 		type = InstructionType::ModRm;
 	}
@@ -42,13 +51,7 @@ X86MemoryMonitor::InstructionType X86MemoryMonitor::GetInstructionType(const Ins
 	else if (category == ZYDIS_CATEGORY_STRINGOP)
 	{
 		type = InstructionType::StringOp;
-	}
-	else if (category == ZYDIS_CATEGORY_AVX2GATHER ||
-			 category == ZYDIS_CATEGORY_GATHER ||
-			 category == ZYDIS_CATEGORY_SCATTER)
-	{
-		type = InstructionType::GatherScatter;
-	}
+	} 
 
 	return type;
 }
@@ -267,10 +270,14 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 	a.and_(rsp, static_cast<uint32_t>(~(ZmmRegWidth - 1)));
 
 	// reserve a xmm register and a gpr register
-	auto index_reg     = GetFreeRegister(zinst.instruction, zinst.operands);
-	auto temp_xmm      = GetFreeRegisterSSE(zinst.instruction, zinst.operands);
+	auto free_reg_pair   = GetFreeRegister2(zinst.instruction, zinst.operands);
+	auto index_reg       = free_reg_pair.first;
+	auto base_backup_reg = free_reg_pair.second;
+
+	auto temp_xmm = GetFreeRegisterSSE(zinst.instruction, zinst.operands);
 	
 	auto xbk_index_reg = ZydisRegToXbyakReg(index_reg);
+	auto xbk_base_backup_reg = ZydisRegToXbyakReg(base_backup_reg);
 
 	// We save the largest reg corresponding to temp_xmm that is supported by the system.
     // This is required because mov-ing a part of a
@@ -283,8 +290,8 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 	encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0, 
 		temp_mm, true, encoded_instruction, encoded_length);
 	a.db(encoded_instruction, encoded_length);
-	
-	a.push(xbk_index_reg);
+
+	a.mov(xbk_base_backup_reg, ZydisRegToXbyakReg(info.base_reg));
 
 	for (uint32_t i = 0; i != element_count; ++i)
 	{
@@ -292,7 +299,10 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 		EmitExtractScalarFromVector(a, i, info.index_size, info.index_reg, temp_xmm, index_reg, info.is_evex);
 
 		// sign extend the extracted value.
-		a.movsxd(ZydisRegToXbyakReg<Xbyak::Reg64>(index_reg), xbk_index_reg);
+		if (info.index_size == 4)
+		{
+			a.movsxd(ZydisRegToXbyakReg<Xbyak::Reg64>(index_reg), ZydisRegToXbyakReg(GetNBitRegister(index_reg, 32)));
+		}
 
 		// calculate the memory address with normal ModRm/SIB form.
 		const uint8_t shift_table[] = { 0, 0, 1, 0, 2, 0, 0, 0, 3 };
@@ -302,7 +312,7 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 			a.shl(xbk_index_reg, shift_bits);
 		}
 
-		a.add(xbk_index_reg, ZydisRegToXbyakReg(info.base_reg));
+		a.add(xbk_index_reg, xbk_base_backup_reg);
 
 		if (info.disp != 0)
 		{
@@ -325,8 +335,7 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 		a.call(rax);
 	}
 
-	// restore gpr and xmm
-	a.pop(xbk_index_reg);
+	// restore mm
 	encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0,
 								 temp_mm, false, encoded_instruction, encoded_length);
 	a.db(encoded_instruction, encoded_length);
@@ -702,20 +711,32 @@ InstructionResult X86MemoryMonitor::EmitMemoryAccess(
 	InstructionResult action = INST_NOTHANDLED;
 
 	auto type = GetInstructionType(inst);
-	if (type != InstructionType::StringOp)
+	switch (type)
 	{
-		if (type != InstructionType::Xlat)
-		{
-			action = EmitExplicitMemoryAccess(inst, a);
-		}
-		else
-		{
-			action = EmitXlat(inst, a);
-		}
+	case InstructionType::None:
+	case InstructionType::ModRm:
+	case InstructionType::AbsAddr:
+	{
+		action = EmitExplicitMemoryAccess(inst, a);
 	}
-	else
+	break;
+	case InstructionType::Xlat:
+	{
+		action = EmitXlat(inst, a);
+	}
+	break;
+	case InstructionType::StringOp:
 	{
 		action = EmitStringOp(inst, a);
+	}
+	break;
+	case InstructionType::GatherScatter:
+	{
+		action = EmitGatherScatter(inst, a);
+	}
+	break;
+	default:
+		break;
 	}
 	
 	return action;
