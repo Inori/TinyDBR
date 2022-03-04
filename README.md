@@ -25,7 +25,9 @@ Other parts are almost the same as the original TinyInst.
 ## Memory Monitor
 TinyDBR ships with a memory access monitor which can monitor memory read/write with some limitations(see below).
 
-Users can inherite the `MemoryCallback` class to get notified when memory access happens.
+Users can inherite the `MemoryCallback` class to get notified when memory access happens. 
+
+See [here](https://github.com/Inori/TinyDBR/blob/master/Translator/main.cpp) for an example.
 
 ### Limitations
 There are some limitations due to my own usage. 
