@@ -2,6 +2,10 @@
 #include "x86_helpers.h"
 #include "xbyak.h"
 
+#ifdef max
+#undef max
+#endif
+
 
 X86MemoryMonitor::X86MemoryMonitor(MonitorFlags flags) :
 	MemoryMonitor(flags)
@@ -39,6 +43,12 @@ X86MemoryMonitor::InstructionType X86MemoryMonitor::GetInstructionType(const Ins
 	{
 		type = InstructionType::StringOp;
 	}
+	else if (category == ZYDIS_CATEGORY_AVX2GATHER ||
+			 category == ZYDIS_CATEGORY_GATHER ||
+			 category == ZYDIS_CATEGORY_SCATTER)
+	{
+		type = InstructionType::GatherScatter;
+	}
 
 	return type;
 }
@@ -66,7 +76,8 @@ void X86MemoryMonitor::EmitGetMemoryAddress(
 		}
 		else
 		{
-			EmitGetMemoryAddressVSIB(inst, a, dst);
+			// handled in EmitGatherScatter
+			FATAL("unexpected mem type VSIB detected, should be handled elsewhere.");
 		}
 	}
 	else
@@ -126,11 +137,6 @@ void X86MemoryMonitor::EmitGetMemoryAddressNormal(
 		a.pop(rax);
 	}
 	a.db(encoded_instruction, encoded_length);
-}
-
-void X86MemoryMonitor::EmitGetMemoryAddressVSIB(
-	const Instruction& inst, Xbyak::CodeGenerator& a, ZydisRegister dst)
-{
 }
 
 InstructionResult X86MemoryMonitor::EmitExplicitMemoryAccess(
@@ -226,6 +232,197 @@ InstructionResult X86MemoryMonitor::EmitXlat(
 	return INST_NOTHANDLED;
 }
 
+// see DynamicRIO: drx_expand_scatter_gather
+InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, Xbyak::CodeGenerator& a)
+{
+	using namespace Xbyak::util;
+
+	InstructionResult action = INST_NOTHANDLED;
+	const auto&       zinst  = inst.zinst;
+
+	GatherScatterInfo info  = {};
+	GetGatherScatterInfo(inst, &info);
+
+	uint32_t element_count = info.vector_size / std::max(info.index_size, info.value_size);
+
+	auto     read_func  = decltype(&X86MemoryMonitor::OnMemoryRead)(&X86MemoryMonitor::OnMemoryRead);
+	uint64_t on_read    = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(read_func));
+	auto     write_func = decltype(&X86MemoryMonitor::OnMemoryWrite)(&X86MemoryMonitor::OnMemoryWrite);
+	uint64_t on_write   = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(write_func));
+
+	if (!info.is_load)
+	{
+		// If any pair of the index, mask, or destination registers are the same, this instruction results a #UD fault.
+		// So we don't need to save the index register before write.
+		a.db(reinterpret_cast<uint8_t*>(inst.address), inst.length);
+		action = INST_HANDLED;
+	}
+
+	EmitSaveContext(a);
+
+	// reserve stack and align
+	a.mov(rbp, rsp);
+	// set max stack align
+	a.sub(rsp, ShadowSpaceSize + ZmmRegWidth);
+	a.and_(rsp, static_cast<uint32_t>(~(ZmmRegWidth - 1)));
+
+	// reserve a xmm register and a gpr register
+	auto index_reg     = GetFreeRegister(zinst.instruction, zinst.operands);
+	auto temp_xmm      = GetFreeRegisterSSE(zinst.instruction, zinst.operands);
+	
+	auto xbk_index_reg = ZydisRegToXbyakReg(index_reg);
+
+	// We save the largest reg corresponding to temp_xmm that is supported by the system.
+    // This is required because mov-ing a part of a
+    // ymm/zmm reg zeroes the remaining automatically. So we need to save the complete
+    // ymm/zmm reg and not just the lower xmm bits.
+	auto temp_mm = GetFullSizeVectorRegister(temp_xmm);
+
+	uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+	size_t  encoded_length = sizeof(encoded_instruction);
+	encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0, 
+		temp_mm, true, encoded_instruction, encoded_length);
+	a.db(encoded_instruction, encoded_length);
+	
+	a.push(xbk_index_reg);
+
+	for (uint32_t i = 0; i != element_count; ++i)
+	{
+		// extract scalar index value for vsib
+		EmitExtractScalarFromVector(a, i, info.index_size, info.index_reg, temp_xmm, index_reg, info.is_evex);
+
+		// sign extend the extracted value.
+		a.movsxd(ZydisRegToXbyakReg<Xbyak::Reg64>(index_reg), xbk_index_reg);
+
+		// calculate the memory address with normal ModRm/SIB form.
+		const uint8_t shift_table[] = { 0, 0, 1, 0, 2, 0, 0, 0, 3 };
+		if (info.scale != 1)
+		{
+			uint8_t shift_bits = shift_table[info.scale];
+			a.shl(xbk_index_reg, shift_bits);
+		}
+
+		a.add(xbk_index_reg, ZydisRegToXbyakReg(info.base_reg));
+
+		if (info.disp != 0)
+		{
+			a.adc(xbk_index_reg, info.disp);
+		}
+
+		// everything is done
+		// call the callback function
+		a.mov(rcx, reinterpret_cast<uint64_t>(this));
+		a.mov(rdx, xbk_index_reg);
+		a.mov(r8, info.value_size);
+		if (info.is_load)
+		{
+			a.mov(rax, on_read);
+		}
+		else
+		{
+			a.mov(rax, on_write);
+		}
+		a.call(rax);
+	}
+
+	// restore gpr and xmm
+	a.pop(xbk_index_reg);
+	encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0,
+								 temp_mm, false, encoded_instruction, encoded_length);
+	a.db(encoded_instruction, encoded_length);
+
+	a.mov(rsp, rbp);
+	EmitRestoreContext(a);
+
+	return action;
+}
+
+void X86MemoryMonitor::EmitExtractScalarFromVector(
+	Xbyak::CodeGenerator& a,
+	size_t                element_idx,
+	size_t                element_size,
+	ZydisRegister         vec_reg,
+	ZydisRegister         tmp_xmm,
+	ZydisRegister         dst_reg,
+	bool                  is_avx512)
+{
+	using namespace Xbyak::util;
+
+	ZydisRegister vec_reg_zmm  = GetNBitVectorRegister(vec_reg, ZmmRegWidth * 8);
+	ZydisRegister vec_reg_ymm  = GetNBitVectorRegister(vec_reg, YmmRegWidth * 8);
+	int           scalarxmmimm = element_idx * element_size / XmmRegWidth;
+	
+	auto xmm = ZydisRegToXbyakReg(tmp_xmm);
+
+	if (is_avx512)
+	{
+		//PREXL8(bb, sg_instr,
+		//	   INSTR_XL8(INSTR_CREATE_vextracti32x4_mask(
+		//					 drcontext, opnd_create_reg(scratch_xmm),
+		//					 opnd_create_reg(DR_REG_K0),
+		//					 opnd_create_immed_int(scalarxmmimm, OPSZ_1),
+		//					 opnd_create_reg(from_simd_reg_zmm)),
+		//				 orig_app_pc));
+
+
+		// force cast Xbyak::Reg to Xbyak::Zmm
+		// k0 is always 0xFFFFFFFFFFFFFFFF
+		a.vextracti32x4(xmm | k0, ZydisRegToXbyakReg<Xbyak::Zmm>(vec_reg_zmm), scalarxmmimm);
+	}
+	else
+	{
+		//PREXL8(bb, sg_instr,
+		//	   INSTR_XL8(
+		//		   INSTR_CREATE_vextracti128(drcontext, opnd_create_reg(scratch_xmm),
+		//									 opnd_create_reg(from_simd_reg_ymm),
+		//									 opnd_create_immed_int(scalarxmmimm, OPSZ_1)),
+		//		   orig_app_pc));
+		 
+		
+		// force cast Xbyak::Reg to Xbyak::Ymm
+		a.vextracti128(xmm, ZydisRegToXbyakReg<Xbyak::Ymm>(vec_reg_ymm), scalarxmmimm);
+	}
+
+	if (element_size == 4)
+	{
+		//PREXL8(bb, sg_instr,
+		//	   INSTR_XL8(INSTR_CREATE_vpextrd(
+		//					 drcontext,
+		//					 opnd_create_reg(
+		//						 IF_X64_ELSE(reg_64_to_32(scratch_reg), scratch_reg)),
+		//					 opnd_create_reg(scratch_xmm),
+		//					 opnd_create_immed_int((el * scalar_bytes) % XMM_REG_SIZE /
+		//											   opnd_size_in_bytes(OPSZ_4),
+		//										   OPSZ_1)),
+		//				 orig_app_pc));
+
+		uint8_t imm = (element_idx * element_size) % XmmRegWidth / 4;
+		auto    dst = GetNBitRegister(dst_reg, 32);
+		a.vpextrd(ZydisRegToXbyakReg(dst), ZydisRegToXbyakReg<Xbyak::Xmm>(tmp_xmm), imm);
+	}
+	else if (element_size == 8)
+	{
+		if (!Is64BitGPRRegister(dst_reg))
+		{
+			FATAL("The qword index versions are unsupported in 32-bit mode.");
+		}
+		
+		//PREXL8(bb, sg_instr,
+		//	   INSTR_XL8(INSTR_CREATE_vpextrq(
+		//					 drcontext, opnd_create_reg(scratch_reg),
+		//					 opnd_create_reg(scratch_xmm),
+		//					 opnd_create_immed_int((el * scalar_bytes) % XMM_REG_SIZE /
+		//											   opnd_size_in_bytes(OPSZ_8),
+		//										   OPSZ_1)),
+		//				 orig_app_pc));
+		uint8_t imm = (element_idx * element_size) % XmmRegWidth / 8;
+		a.vpextrq(ZydisRegToXbyakReg(dst_reg), ZydisRegToXbyakReg<Xbyak::Xmm>(tmp_xmm), imm);
+	}
+	else
+	{
+		FATAL("Unexpected scalar size.");
+	}
+}
 
 void X86MemoryMonitor::EmitStringRead(
 	const Instruction& inst, Xbyak::CodeGenerator& a, 
@@ -332,6 +529,117 @@ a.L(label);
 
 	EmitEpilog(a);
 	EmitRestoreContext(a);
+}
+
+void X86MemoryMonitor::GetGatherScatterInfo(const Instruction& inst, GatherScatterInfo* info)
+{
+	auto opcode = inst.zinst.instruction.mnemonic;
+	switch (opcode)
+	{
+	case ZYDIS_MNEMONIC_VGATHERDPD:
+		info->index_size = 4;
+		info->value_size = 8;
+		info->is_load    = true;
+		break;
+	case ZYDIS_MNEMONIC_VGATHERQPD:
+		info->index_size = 8;
+		info->value_size = 8;
+		info->is_load    = true;
+		break;
+	case ZYDIS_MNEMONIC_VGATHERDPS:
+		info->index_size = 4;
+		info->value_size = 4;
+		info->is_load    = true;
+		break;
+	case ZYDIS_MNEMONIC_VGATHERQPS:
+		info->index_size = 8;
+		info->value_size = 4;
+		info->is_load    = true;
+		break;
+	case ZYDIS_MNEMONIC_VPGATHERDD:
+		info->index_size = 4;
+		info->value_size = 4;
+		info->is_load    = true;
+		break;
+	case ZYDIS_MNEMONIC_VPGATHERQD:
+		info->index_size = 8;
+		info->value_size = 4;
+		info->is_load    = true;
+		break;
+	case ZYDIS_MNEMONIC_VPGATHERDQ:
+		info->index_size = 4;
+		info->value_size = 8;
+		info->is_load    = true;
+		break;
+	case ZYDIS_MNEMONIC_VPGATHERQQ:
+		info->index_size = 8;
+		info->value_size = 8;
+		info->is_load    = true;
+		break;
+	case ZYDIS_MNEMONIC_VSCATTERDPD:
+		info->index_size = 4;
+		info->value_size = 8;
+		info->is_load    = false;
+		break;
+	case ZYDIS_MNEMONIC_VSCATTERQPD:
+		info->index_size = 8;
+		info->value_size = 8;
+		info->is_load    = false;
+		break;
+	case ZYDIS_MNEMONIC_VSCATTERDPS:
+		info->index_size = 4;
+		info->value_size = 4;
+		info->is_load    = false;
+		break;
+	case ZYDIS_MNEMONIC_VSCATTERQPS:
+		info->index_size = 8;
+		info->value_size = 4;
+		info->is_load    = false;
+		break;
+	case ZYDIS_MNEMONIC_VPSCATTERDD:
+		info->index_size = 4;
+		info->value_size = 4;
+		info->is_load    = false;
+		break;
+	case ZYDIS_MNEMONIC_VPSCATTERQD:
+		info->index_size = 8;
+		info->value_size = 4;
+		info->is_load    = false;
+		break;
+	case ZYDIS_MNEMONIC_VPSCATTERDQ:
+		info->index_size = 4;
+		info->value_size = 8;
+		info->is_load    = false;
+		break;
+	case ZYDIS_MNEMONIC_VPSCATTERQQ:
+		info->index_size = 8;
+		info->value_size = 8;
+		info->is_load    = false;
+		break;
+	default:
+		FATAL("Unsupported opcode.");
+		break;
+	}
+
+	info->is_evex = inst.zinst.instruction.attributes & ZYDIS_ATTRIB_HAS_EVEX;
+
+	const ZydisDecodedOperand* operand = nullptr;
+	if (info->is_load)
+	{
+		operand = &inst.zinst.operands[0];
+	}
+	else
+	{
+		operand = &inst.zinst.operands[2];
+	}
+	info->vector_size = operand->size / 8;
+
+	auto mem_op = GetExplicitMemoryOperand(
+		inst.zinst.operands, inst.zinst.instruction.operand_count_visible);
+	info->base_reg  = mem_op->mem.base;
+	info->index_reg = mem_op->mem.index;
+	info->disp      = mem_op->mem.disp.value;
+	info->scale     = mem_op->mem.scale;
 }
 
 InstructionResult X86MemoryMonitor::EmitStringOp(const Instruction& inst, Xbyak::CodeGenerator& a)

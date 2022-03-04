@@ -96,8 +96,6 @@ pop r15
 
 
 
-
-
 rep movsd
 ==================
 
@@ -176,3 +174,4 @@ pop r15
 
 
       
+vpgatherdd  ymm19{k1},dword ptr [rax+ymm2]

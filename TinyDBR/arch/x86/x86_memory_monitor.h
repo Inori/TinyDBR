@@ -18,12 +18,29 @@ private:
 		ModRm,
 		AbsAddr,
 		Xlat,
-		StringOp
+		StringOp,
+		GatherScatter
+	};
+
+	struct GatherScatterInfo
+	{
+		size_t        index_size  = 0;
+		size_t        value_size  = 0;
+		size_t        vector_size = 0;
+		bool          is_load     = false;
+		bool          is_evex     = false;
+		ZydisRegister index_reg   = ZYDIS_REGISTER_NONE;
+		ZydisRegister base_reg    = ZYDIS_REGISTER_NONE;
+		uint32_t      disp        = 0;
+		uint8_t       scale       = 0;
 	};
 
 	// temp code size to generate instruction to call callbacks
 	constexpr static size_t TempCodeSize    = 0x200;
 	constexpr static size_t ShadowSpaceSize = 0x20;
+	constexpr static size_t XmmRegWidth     = 16;
+	constexpr static size_t YmmRegWidth     = 32;
+	constexpr static size_t ZmmRegWidth     = 64;
 
 public:
 	X86MemoryMonitor(MonitorFlags flags);
@@ -71,10 +88,6 @@ private:
 		const ZydisDecodedOperand* mem_operand,
 		ZydisRegister              dst);
 
-	void EmitGetMemoryAddressVSIB(
-		const Instruction&    inst,
-		Xbyak::CodeGenerator& a,
-		ZydisRegister         dst);
 
 	InstructionResult EmitExplicitMemoryAccess(
 		const Instruction& inst,
@@ -87,6 +100,19 @@ private:
 	InstructionResult EmitXlat(
 		const Instruction& inst,
 		Xbyak::CodeGenerator& a);
+
+	InstructionResult EmitGatherScatter(
+		const Instruction&    inst,
+		Xbyak::CodeGenerator& a);
+
+	void EmitExtractScalarFromVector(
+		Xbyak::CodeGenerator& a,
+		size_t                element_idx,
+		size_t                element_size,
+		ZydisRegister         vec_reg,
+		ZydisRegister         tmp_xmm,
+		ZydisRegister         dst_reg,
+		bool                  is_avx512);
 
 	ZydisRegister EmitPreWrite(
 		const Instruction&    inst,
@@ -105,7 +131,9 @@ private:
 		const Instruction&    inst,
 		Xbyak::CodeGenerator& a);
 
-
+	void GetGatherScatterInfo(
+		const Instruction& inst,
+		GatherScatterInfo* info);
 
 private:
 	std::array<uint8_t, TempCodeSize>     code_buffer;
