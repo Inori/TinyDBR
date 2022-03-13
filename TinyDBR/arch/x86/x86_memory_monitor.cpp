@@ -11,6 +11,18 @@ X86MemoryMonitor::X86MemoryMonitor(MonitorFlags flags, MemoryCallback* callback)
 	MemoryMonitor(flags, callback)
 {
 	code_generator = std::make_unique<Xbyak::CodeGenerator>(code_buffer.size(), code_buffer.data());
+	bool support_avx = false;
+	bool support_avx512 = false;
+	DetectAvxSupport(support_avx, support_avx512);
+
+	if (support_avx)
+	{
+		avx_support = AvxSupport::AVX;
+	}
+	if (support_avx512)
+	{
+		avx_support = AvxSupport::AVX512;
+	}
 }
 
 X86MemoryMonitor::~X86MemoryMonitor()
@@ -798,6 +810,7 @@ void X86MemoryMonitor::EmitSaveContext(Xbyak::CodeGenerator& a)
 	size_t  encoded_length          = Pushaq(
         ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
 	a.db(encoded_instruction, encoded_length);
+
 }
 
 // popaq

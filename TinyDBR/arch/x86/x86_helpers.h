@@ -50,6 +50,7 @@ bool          IsVectorRegister(ZydisRegister reg);
 bool          Is64BitGPRRegister(ZydisRegister reg);
 bool          IsHigh8BitRegister(ZydisRegister reg);
 bool          IsSetCCInstruction(ZydisMnemonic mnemonic);
+void          DetectAvxSupport(bool& support_avx, bool& support_avx512);
 
 template <typename T>
 const T& ZydisRegToXbyakReg(ZydisRegister reg)

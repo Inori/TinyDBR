@@ -22,6 +22,12 @@ private:
 		GatherScatter
 	};
 
+	enum class AvxSupport
+	{
+		AVX,
+		AVX512
+	};
+
 	struct GatherScatterInfo
 	{
 		size_t        index_size  = 0;
@@ -136,6 +142,7 @@ private:
 		GatherScatterInfo* info);
 
 private:
+	AvxSupport                            avx_support;
 	std::array<uint8_t, TempCodeSize>     code_buffer;
 	std::unique_ptr<Xbyak::CodeGenerator> code_generator;
 };

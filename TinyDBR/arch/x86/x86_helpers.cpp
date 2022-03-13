@@ -242,21 +242,33 @@ ZydisRegister GetReducedVectorRegister(ZydisRegister reg)
 
 void DetectAvxSupport(bool& support_avx, bool& support_avx512)
 {
-	int info[4] = { 0 };
-	__cpuid(info, 0);
-	int nIds = info[0];
+	static bool first_run = true;
+	static bool avx       = false;
+	static bool avx512    = false;
 
-	if (nIds >= 0x00000001)
+	if (first_run)
 	{
-		__cpuid(info, 0x00000001);
-		support_avx = (info[2] & ((int)1 << 28)) != 0;
+		int info[4] = { 0 };
+		__cpuid(info, 0);
+		int nIds = info[0];
+
+		if (nIds >= 0x00000001)
+		{
+			__cpuid(info, 0x00000001);
+			avx = (info[2] & ((int)1 << 28)) != 0;
+		}
+
+		if (nIds >= 0x00000007)
+		{
+			__cpuid(info, 0x00000007);
+			avx512 = (info[1] & ((int)1 << 16)) != 0;
+		}
+
+		first_run = false;
 	}
 
-	if (nIds >= 0x00000007)
-	{
-		__cpuid(info, 0x00000007);
-		support_avx512 = (info[1] & ((int)1 << 16)) != 0;
-	}
+	support_avx = avx;
+	support_avx512 = avx512;
 }
 
 ZydisRegister GetFullSizeVectorRegister(ZydisRegister reg, bool hw_support)
