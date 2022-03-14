@@ -1,6 +1,7 @@
 #include "x86_memory_monitor.h"
 #include "x86_helpers.h"
 #include "xbyak.h"
+#include <intrin.h>
 
 #ifdef max
 #undef max
@@ -11,18 +12,7 @@ X86MemoryMonitor::X86MemoryMonitor(MonitorFlags flags, MemoryCallback* callback)
 	MemoryMonitor(flags, callback)
 {
 	code_generator = std::make_unique<Xbyak::CodeGenerator>(code_buffer.size(), code_buffer.data());
-	bool support_avx = false;
-	bool support_avx512 = false;
-	DetectAvxSupport(support_avx, support_avx512);
-
-	if (support_avx)
-	{
-		avx_support = AvxSupport::AVX;
-	}
-	if (support_avx512)
-	{
-		avx_support = AvxSupport::AVX512;
-	}
+	DetectAvxInformation();
 }
 
 X86MemoryMonitor::~X86MemoryMonitor()
@@ -66,6 +56,41 @@ X86MemoryMonitor::InstructionType X86MemoryMonitor::GetInstructionType(const Ins
 	} 
 
 	return type;
+}
+
+void X86MemoryMonitor::DetectAvxInformation()
+{
+	bool support_avx    = false;
+	bool support_avx512 = false;
+	DetectAvxSupport(support_avx, support_avx512);
+
+	// assume all cpu support sse
+	avx_info.feature = AvxFeature::SSE;
+	if (support_avx)
+	{
+		avx_info.feature = AvxFeature::AVX;
+	}
+	if (support_avx512)
+	{
+		avx_info.feature = AvxFeature::AVX512;
+	}
+
+	// TODO:
+	assert(avx_info.feature == AvxFeature::AVX || avx_info.feature == AvxFeature::AVX512);
+
+	int32_t info[4] = { 0 };
+	__cpuidex(info, 1, 0);
+	avx_info.support_xsave = ((info[2] & ((int)1 << 26)) != 0) &&	// XSAVE
+							 ((info[2] & ((int)1 << 27)) != 0);		// OSXSAVE
+	// TODO:
+	// Support CPUs which don't support xsave/xrstor
+	assert(avx_info.support_xsave == true);
+
+	__cpuidex(info, 0x0D, 0);
+	// ebx: size to keep currently enabled components of the frame
+	// ecx: maximal frame size of all components
+	// here we take ecx value
+	avx_info.xsave_frame_size = info[2];
 }
 
 void X86MemoryMonitor::EmitGetMemoryAddress(
@@ -278,8 +303,10 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 	// reserve stack and align
 	a.mov(rbp, rsp);
 	// set max stack align
-	a.sub(rsp, ShadowSpaceSize + ZmmRegWidth);
-	a.and_(rsp, static_cast<uint32_t>(~(ZmmRegWidth - 1)));
+	uint64_t stack_space = ((ShadowSpaceSize + ZmmRegWidth) / ZmmRegWidth + 1) * ZmmRegWidth;
+	// the stack is already aligned in EmitSaveContext
+	// so we keep the alignment
+	a.sub(rsp, stack_space);
 
 	// reserve a xmm register and a gpr register
 	auto free_reg_pair   = GetFreeRegister2(zinst.instruction, zinst.operands);
@@ -297,11 +324,13 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
     // ymm/zmm reg and not just the lower xmm bits.
 	auto temp_mm = GetFullSizeVectorRegister(temp_xmm);
 
-	uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
-	size_t  encoded_length = sizeof(encoded_instruction);
-	encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0, 
-		temp_mm, true, encoded_instruction, encoded_length);
-	a.db(encoded_instruction, encoded_length);
+	// xmm is already saved in EmitSaveContext
+	
+	//uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+	//size_t  encoded_length = sizeof(encoded_instruction);
+	//encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0, 
+	//	temp_mm, true, encoded_instruction, encoded_length);
+	//a.db(encoded_instruction, encoded_length);
 
 	a.mov(xbk_base_backup_reg, ZydisRegToXbyakReg(info.base_reg));
 
@@ -347,12 +376,14 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 		a.call(rax);
 	}
 
-	// restore mm
-	encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0,
-								 temp_mm, false, encoded_instruction, encoded_length);
-	a.db(encoded_instruction, encoded_length);
+	// xmm is restored in EmitRestoreContext
 
-	a.mov(rsp, rbp);
+	// restore mm
+	//encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0,
+	//							 temp_mm, false, encoded_instruction, encoded_length);
+	//a.db(encoded_instruction, encoded_length);
+
+	a.add(rsp, stack_space);
 	EmitRestoreContext(a);
 
 	return action;
@@ -805,43 +836,90 @@ void X86MemoryMonitor::EmitMemoryCallback(
 // pushaq
 void X86MemoryMonitor::EmitSaveContext(Xbyak::CodeGenerator& a)
 {
+	using namespace Xbyak::util;
+
 	a.pushfq();
 	uint8_t encoded_instruction[32] = { 0 };
 	size_t  encoded_length          = Pushaq(
         ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
 	a.db(encoded_instruction, encoded_length);
 
+	// backup rsp
+	a.mov(rbp, rsp);
+
+	a.sub(rsp, avx_info.xsave_frame_size);
+	a.and_(rsp, static_cast<uint32_t>(~(64 - 1)));
+	// set xsave mask
+	a.or_(eax, 0xFFFFFFFF);
+	a.or_(edx, 0xFFFFFFFF);
+
+	// emm... xbyak doesn't support xsave, so we use zydis encoder
+	ZydisEncoderRequest req;
+	memset(&req, 0, sizeof(req));
+	req.mnemonic             = ZYDIS_MNEMONIC_XSAVE64;
+	req.operand_count        = 1;
+	req.operands[0].type     = ZYDIS_OPERAND_TYPE_MEMORY;
+	req.operands[0].mem.base = ZYDIS_REGISTER_RSP;
+
+	encoded_length = sizeof(encoded_instruction);
+	if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(&req, encoded_instruction, &encoded_length)))
+	{
+		FATAL("Failed to encode instruction");
+	}
+	a.db(encoded_instruction, encoded_length);
 }
 
 // popaq
 // popfq
 void X86MemoryMonitor::EmitRestoreContext(Xbyak::CodeGenerator& a)
 {
+	using namespace Xbyak::util;
+
 	uint8_t encoded_instruction[32] = { 0 };
-	size_t  encoded_length          = Popaq(
-        ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
+	size_t  encoded_length          = sizeof(encoded_instruction);
+
+	// set xsave mask
+	a.or_(eax, 0xFFFFFFFF);
+	a.or_(edx, 0xFFFFFFFF);
+
+	// emm... xbyak doesn't support xrstor, so we use zydis encoder
+	ZydisEncoderRequest req;
+	memset(&req, 0, sizeof(req));
+	req.mnemonic             = ZYDIS_MNEMONIC_XRSTOR64;
+	req.operand_count        = 1;
+	req.operands[0].type     = ZYDIS_OPERAND_TYPE_MEMORY;
+	req.operands[0].mem.base = ZYDIS_REGISTER_RSP;
+
+	if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(&req, encoded_instruction, &encoded_length)))
+	{
+		FATAL("Failed to encode instruction");
+	}
+	a.db(encoded_instruction, encoded_length);
+
+	// restore rsp
+	a.mov(rsp, rbp);
+
+	encoded_length = Popaq(
+		ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
 	a.db(encoded_instruction, encoded_length);
 	a.popfq();
 }
+
 
 void X86MemoryMonitor::EmitProlog(Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
 
-	// backup rsp
-	a.mov(rbp, rsp);
+
 	// shadow space
 	a.sub(rsp, ShadowSpaceSize);
-	// 16 bytes align
-	a.and_(rsp, static_cast<uint32_t>(~(16 - 1)));
 }
 
 void X86MemoryMonitor::EmitEpilog(Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
 
-	// restore rsp
-	a.mov(rsp, rbp);
+	a.add(rsp, ShadowSpaceSize);
 }
 
 InstructionResult X86MemoryMonitor::InstrumentInstruction(

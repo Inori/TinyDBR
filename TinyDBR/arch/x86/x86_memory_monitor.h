@@ -22,10 +22,18 @@ private:
 		GatherScatter
 	};
 
-	enum class AvxSupport
+	enum class AvxFeature
 	{
+		SSE,
 		AVX,
 		AVX512
+	};
+
+	struct AvxInformation
+	{
+		AvxFeature feature;
+		bool       support_xsave;
+		uint32_t   xsave_frame_size;
 	};
 
 	struct GatherScatterInfo
@@ -65,8 +73,11 @@ private:
 	InstructionType GetInstructionType(
 		const Instruction& inst);
 
+	void DetectAvxInformation();
+
 	void EmitSaveContext(Xbyak::CodeGenerator& a);
 	void EmitRestoreContext(Xbyak::CodeGenerator& a);
+
 
 	void EmitProlog(Xbyak::CodeGenerator& a);
 	void EmitEpilog(Xbyak::CodeGenerator& a);
@@ -142,7 +153,7 @@ private:
 		GatherScatterInfo* info);
 
 private:
-	AvxSupport                            avx_support;
+	AvxInformation                        avx_info = {};
 	std::array<uint8_t, TempCodeSize>     code_buffer;
 	std::unique_ptr<Xbyak::CodeGenerator> code_generator;
 };
