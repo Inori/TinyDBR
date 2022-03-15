@@ -50,7 +50,7 @@ private:
 	};
 
 	// temp code size to generate instruction to call callbacks
-	constexpr static size_t TempCodeSize    = 0x200;
+	constexpr static size_t TempCodeSize    = 0x300;
 	constexpr static size_t ShadowSpaceSize = 0x20;
 	constexpr static size_t XmmRegWidth     = 16;
 	constexpr static size_t YmmRegWidth     = 32;

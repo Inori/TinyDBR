@@ -300,8 +300,6 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 
 	EmitSaveContext(a);
 
-	// reserve stack and align
-	a.mov(rbp, rsp);
 	// set max stack align
 	uint64_t stack_space = ((ShadowSpaceSize + ZmmRegWidth) / ZmmRegWidth + 1) * ZmmRegWidth;
 	// the stack is already aligned in EmitSaveContext
@@ -318,14 +316,15 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 	auto xbk_index_reg = ZydisRegToXbyakReg(index_reg);
 	auto xbk_base_backup_reg = ZydisRegToXbyakReg(base_backup_reg);
 
+	// xmm is already saved in EmitSaveContext
+
 	// We save the largest reg corresponding to temp_xmm that is supported by the system.
     // This is required because mov-ing a part of a
     // ymm/zmm reg zeroes the remaining automatically. So we need to save the complete
     // ymm/zmm reg and not just the lower xmm bits.
-	auto temp_mm = GetFullSizeVectorRegister(temp_xmm);
+	// 
+	//auto temp_mm = GetFullSizeVectorRegister(temp_xmm);
 
-	// xmm is already saved in EmitSaveContext
-	
 	//uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
 	//size_t  encoded_length = sizeof(encoded_instruction);
 	//encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0, 
