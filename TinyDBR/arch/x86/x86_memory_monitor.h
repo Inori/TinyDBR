@@ -78,9 +78,19 @@ private:
 	void EmitSaveContext(Xbyak::CodeGenerator& a);
 	void EmitRestoreContext(Xbyak::CodeGenerator& a);
 
+	void EmitSaveContextAvx(Xbyak::CodeGenerator& a);
+	void EmitRestoreContextAvx(Xbyak::CodeGenerator& a);
+	void EmitSaveContextNoAvx(Xbyak::CodeGenerator& a);
+	void EmitRestoreContextNoAvx(Xbyak::CodeGenerator& a);
+
 
 	void EmitProlog(Xbyak::CodeGenerator& a);
 	void EmitEpilog(Xbyak::CodeGenerator& a);
+
+	void EmitPrologAvx(Xbyak::CodeGenerator& a);
+	void EmitEpilogAvx(Xbyak::CodeGenerator& a);
+	void EmitPrologNoAvx(Xbyak::CodeGenerator& a);
+	void EmitEpilogNoAvx(Xbyak::CodeGenerator& a);
 
 	InstructionResult EmitMemoryAccess(
 		const Instruction& inst,

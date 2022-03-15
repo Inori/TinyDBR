@@ -164,6 +164,9 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>TinyDBR.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>echo F|xcopy $(OutDir)Translator.dll /d /k /y D:\Code\UnrealProjects\UmgUI\Output\WindowsNoEditor\Engine\Binaries\Win64\TinyDBR.dll</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />

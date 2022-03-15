@@ -300,11 +300,24 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 
 	EmitSaveContext(a);
 
-	// set max stack align
-	uint64_t stack_space = ((ShadowSpaceSize + ZmmRegWidth) / ZmmRegWidth + 1) * ZmmRegWidth;
-	// the stack is already aligned in EmitSaveContext
-	// so we keep the alignment
-	a.sub(rsp, stack_space);
+	uint64_t stack_space = 0;
+	if (m_flags & SaveExtendedState)
+	{
+		// set max stack align
+		stack_space = ((ShadowSpaceSize + ZmmRegWidth) / ZmmRegWidth + 1) * ZmmRegWidth;
+		// the stack is already aligned in EmitSaveContext
+		// so we keep the alignment
+		a.sub(rsp, stack_space);
+	}
+	else
+	{
+		// reserve stack and align
+		a.mov(rbp, rsp);
+		// set max stack align
+		a.sub(rsp, ShadowSpaceSize + ZmmRegWidth);
+		a.and_(rsp, static_cast<uint32_t>(~(ZmmRegWidth - 1)));
+	}
+
 
 	// reserve a xmm register and a gpr register
 	auto free_reg_pair   = GetFreeRegister2(zinst.instruction, zinst.operands);
@@ -316,21 +329,28 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 	auto xbk_index_reg = ZydisRegToXbyakReg(index_reg);
 	auto xbk_base_backup_reg = ZydisRegToXbyakReg(base_backup_reg);
 
-	// xmm is already saved in EmitSaveContext
+	uint8_t       encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+	size_t        encoded_length = sizeof(encoded_instruction);
+	ZydisRegister temp_mm        = ZYDIS_REGISTER_NONE;
+	if (!(m_flags & SaveExtendedState))
+	{
+		// We save the largest reg corresponding to temp_xmm that is supported by the system.
+		// This is required because mov-ing a part of a
+		// ymm/zmm reg zeroes the remaining automatically. So we need to save the complete
+		// ymm/zmm reg and not just the lower xmm bits.
+		//
+		temp_mm = GetFullSizeVectorRegister(temp_xmm);
 
-	// We save the largest reg corresponding to temp_xmm that is supported by the system.
-    // This is required because mov-ing a part of a
-    // ymm/zmm reg zeroes the remaining automatically. So we need to save the complete
-    // ymm/zmm reg and not just the lower xmm bits.
-	// 
-	//auto temp_mm = GetFullSizeVectorRegister(temp_xmm);
+		encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0,
+									 temp_mm, true, encoded_instruction, encoded_length);
+		a.db(encoded_instruction, encoded_length);
+	}
 
-	//uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
-	//size_t  encoded_length = sizeof(encoded_instruction);
-	//encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0, 
-	//	temp_mm, true, encoded_instruction, encoded_length);
-	//a.db(encoded_instruction, encoded_length);
-
+	// TODO:
+	// When specify SaveExtendedState flag, rax, rdx and rdi will be modified
+	// in EmitSaveContext, thus if the instruction is scatter and address base 
+	// register is one of the above, the address will be broken, need to fix.
+	// e.g. recover again from the pushaq stack before this mov.
 	a.mov(xbk_base_backup_reg, ZydisRegToXbyakReg(info.base_reg));
 
 	for (uint32_t i = 0; i != element_count; ++i)
@@ -375,14 +395,20 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 		a.call(rax);
 	}
 
-	// xmm is restored in EmitRestoreContext
+	if (m_flags & SaveExtendedState)
+	{
+		a.add(rsp, stack_space);
+	}
+	else
+	{
+		// restore mm
+		encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0,
+									 temp_mm, false, encoded_instruction, encoded_length);
+		a.db(encoded_instruction, encoded_length);
 
-	// restore mm
-	//encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0,
-	//							 temp_mm, false, encoded_instruction, encoded_length);
-	//a.db(encoded_instruction, encoded_length);
+		a.mov(rsp, rbp);
+	}
 
-	a.add(rsp, stack_space);
 	EmitRestoreContext(a);
 
 	return action;
@@ -835,6 +861,33 @@ void X86MemoryMonitor::EmitMemoryCallback(
 // pushaq
 void X86MemoryMonitor::EmitSaveContext(Xbyak::CodeGenerator& a)
 {
+	if (m_flags & SaveExtendedState)
+	{
+		EmitSaveContextAvx(a);
+	}
+	else
+	{
+		EmitSaveContextNoAvx(a);
+	}
+}
+
+// popaq
+// popfq
+void X86MemoryMonitor::EmitRestoreContext(Xbyak::CodeGenerator& a)
+{
+	if (m_flags & SaveExtendedState)
+	{
+		EmitRestoreContextAvx(a);
+	}
+	else
+	{
+		EmitRestoreContextNoAvx(a);
+	}
+}
+
+
+void X86MemoryMonitor::EmitSaveContextAvx(Xbyak::CodeGenerator& a)
+{
 	using namespace Xbyak::util;
 
 	a.pushfq();
@@ -856,8 +909,8 @@ void X86MemoryMonitor::EmitSaveContext(Xbyak::CodeGenerator& a)
 	a.mov(rcx, loop_count);
 	a.mov(rdi, rsp);
 	a.xor_(rax, rax);
-	a.rep(); a.stosq();
-
+	a.rep();
+	a.stosq();
 
 	// set xsave mask
 	a.or_(eax, 0xFFFFFFFF);
@@ -879,9 +932,7 @@ void X86MemoryMonitor::EmitSaveContext(Xbyak::CodeGenerator& a)
 	a.db(encoded_instruction, encoded_length);
 }
 
-// popaq
-// popfq
-void X86MemoryMonitor::EmitRestoreContext(Xbyak::CodeGenerator& a)
+void X86MemoryMonitor::EmitRestoreContextAvx(Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
 
@@ -915,21 +966,83 @@ void X86MemoryMonitor::EmitRestoreContext(Xbyak::CodeGenerator& a)
 	a.popfq();
 }
 
+void X86MemoryMonitor::EmitSaveContextNoAvx(Xbyak::CodeGenerator& a)
+{
+	a.pushfq();
+
+	uint8_t encoded_instruction[32] = { 0 };
+	size_t  encoded_length          = Pushaq(
+        ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
+	a.db(encoded_instruction, encoded_length);
+}
+
+void X86MemoryMonitor::EmitRestoreContextNoAvx(Xbyak::CodeGenerator& a)
+{
+	uint8_t encoded_instruction[32] = { 0 };
+	size_t  encoded_length          = Popaq(
+        ZYDIS_MACHINE_MODE_LONG_64, encoded_instruction, sizeof(encoded_instruction));
+	a.db(encoded_instruction, encoded_length);
+
+	a.popfq();
+}
 
 void X86MemoryMonitor::EmitProlog(Xbyak::CodeGenerator& a)
 {
-	using namespace Xbyak::util;
+	if (m_flags & SaveExtendedState)
+	{
+		EmitPrologAvx(a);
+	}
+	else
+	{
+		EmitPrologNoAvx(a);
+	}
+}
 
+void X86MemoryMonitor::EmitEpilog(Xbyak::CodeGenerator& a)
+{
+	if (m_flags & SaveExtendedState)
+	{
+		EmitEpilogAvx(a);
+	}
+	else
+	{
+		EmitEpilogNoAvx(a);
+	}
+}
+
+void X86MemoryMonitor::EmitPrologAvx(Xbyak::CodeGenerator& a)
+{
+	using namespace Xbyak::util;
 
 	// shadow space
 	a.sub(rsp, ShadowSpaceSize);
 }
 
-void X86MemoryMonitor::EmitEpilog(Xbyak::CodeGenerator& a)
+void X86MemoryMonitor::EmitEpilogAvx(Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
 
 	a.add(rsp, ShadowSpaceSize);
+}
+
+void X86MemoryMonitor::EmitPrologNoAvx(Xbyak::CodeGenerator& a)
+{
+	using namespace Xbyak::util;
+
+	// backup rsp
+	a.mov(rbp, rsp);
+	// shadow space
+	a.sub(rsp, ShadowSpaceSize);
+	// 16 bytes align
+	a.and_(rsp, static_cast<uint32_t>(~(16 - 1)));
+}
+
+void X86MemoryMonitor::EmitEpilogNoAvx(Xbyak::CodeGenerator& a)
+{
+	using namespace Xbyak::util;
+
+	// restore rsp
+	a.mov(rsp, rbp);
 }
 
 InstructionResult X86MemoryMonitor::InstrumentInstruction(

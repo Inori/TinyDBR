@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <map>
 
 /*
 * TinyDBR DLL translator, you need to inject this compiled dll into to target process
@@ -19,20 +20,25 @@ class MyMonitor : public MemoryCallback
 public:
 	MyMonitor()
 	{
+		m_map.insert(std::make_pair<uint64_t, uint64_t>((uint64_t)&instrumenter, (uint64_t)&instrumenter));
+		m_map.insert(std::make_pair<uint64_t, uint64_t>(1, 2));
+		m_map.insert(std::make_pair<uint64_t, uint64_t>(0x00400000, 0x00400000));
+		m_map.insert(std::make_pair<uint64_t, uint64_t>((uint64_t)this, (uint64_t)this));
 	}
 	virtual ~MyMonitor(){};
 
 	void OnMemoryRead(void* address, size_t size) override
 	{
-		
+		//auto iter = m_map.lower_bound((uint64_t)address);
 	}
 
 	void OnMemoryWrite(void* address, size_t size) override
 	{
-		
+		//auto iter = m_map.upper_bound((uint64_t)address);
 	}
 
 private:
+	std::map<uint64_t, uint64_t> m_map;
 };
 
 
