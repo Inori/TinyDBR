@@ -278,17 +278,28 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 	using namespace Xbyak::util;
 
 	InstructionResult action = INST_NOTHANDLED;
+	if (m_flags & SaveExtendedState)
+	{
+		action = EmitGatherScatterEs(inst, a);
+	}
+	else
+	{
+		action = EmitGatherScatterNoEs(inst, a);
+	}
+
+	return action;
+}
+
+InstructionResult X86MemoryMonitor::EmitGatherScatterEs(
+	const Instruction& inst, Xbyak::CodeGenerator& a)
+{
+	using namespace Xbyak::util;
+
+	InstructionResult action = INST_NOTHANDLED;
 	const auto&       zinst  = inst.zinst;
 
-	GatherScatterInfo info  = {};
+	GatherScatterInfo info = {};
 	GetGatherScatterInfo(inst, &info);
-
-	uint32_t element_count = info.vector_size / std::max(info.index_size, info.value_size);
-
-	auto     read_func  = decltype(&X86MemoryMonitor::OnMemoryRead)(&X86MemoryMonitor::OnMemoryRead);
-	uint64_t on_read    = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(read_func));
-	auto     write_func = decltype(&X86MemoryMonitor::OnMemoryWrite)(&X86MemoryMonitor::OnMemoryWrite);
-	uint64_t on_write   = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(write_func));
 
 	if (!info.is_load)
 	{
@@ -298,57 +309,110 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 		action = INST_HANDLED;
 	}
 
-	EmitSaveContext(a);
+	EmitSaveContextEs(a);
 
-	uint64_t stack_space = 0;
-	if (m_flags & SaveExtendedState)
+	// set max stack align
+	uint64_t stack_space = ((ShadowSpaceSize + ZmmRegWidth) / ZmmRegWidth + 1) * ZmmRegWidth;
+	// the stack is already aligned in EmitSaveContext
+	// so we keep the alignment
+	a.sub(rsp, stack_space);
+
+	auto temp_xmm = GetFreeRegisterSSE(zinst.instruction, zinst.operands);
+
+	// generate expansion calls
+	EmitGatherScatterElementAccess(inst, a, info, temp_xmm);
+
+
+	a.add(rsp, stack_space);
+	EmitRestoreContextEs(a);
+
+	return action;
+}
+
+InstructionResult X86MemoryMonitor::EmitGatherScatterNoEs(
+	const Instruction& inst, Xbyak::CodeGenerator& a)
+{
+	using namespace Xbyak::util;
+
+	InstructionResult action = INST_NOTHANDLED;
+	const auto&       zinst  = inst.zinst;
+
+	GatherScatterInfo info = {};
+	GetGatherScatterInfo(inst, &info);
+
+	if (!info.is_load)
 	{
-		// set max stack align
-		stack_space = ((ShadowSpaceSize + ZmmRegWidth) / ZmmRegWidth + 1) * ZmmRegWidth;
-		// the stack is already aligned in EmitSaveContext
-		// so we keep the alignment
-		a.sub(rsp, stack_space);
-	}
-	else
-	{
-		// reserve stack and align
-		a.mov(rbp, rsp);
-		// set max stack align
-		a.sub(rsp, ShadowSpaceSize + ZmmRegWidth);
-		a.and_(rsp, static_cast<uint32_t>(~(ZmmRegWidth - 1)));
+		// If any pair of the index, mask, or destination registers are the same, this instruction results a #UD fault.
+		// So we don't need to save the index register before write.
+		a.db(reinterpret_cast<uint8_t*>(inst.address), inst.length);
+		action = INST_HANDLED;
 	}
 
+	EmitSaveContextNoEs(a);
+
+	// reserve stack and align
+	a.mov(rbp, rsp);
+	// set max stack align
+	a.sub(rsp, ShadowSpaceSize + ZmmRegWidth);
+	a.and_(rsp, static_cast<uint32_t>(~(ZmmRegWidth - 1)));
+
+
+	auto temp_xmm = GetFreeRegisterSSE(zinst.instruction, zinst.operands);
+	// We save the largest reg corresponding to temp_xmm that is supported by the system.
+	// This is required because mov-ing a part of a
+	// ymm/zmm reg zeroes the remaining automatically. So we need to save the complete
+	// ymm/zmm reg and not just the lower xmm bits.
+	auto temp_mm = GetFullSizeVectorRegister(temp_xmm);
+
+	uint8_t encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
+	size_t  encoded_length = sizeof(encoded_instruction);
+	encoded_length         = MovStackAVX(zinst.instruction.machine_mode, 0,
+                                 temp_mm, true, encoded_instruction, encoded_length);
+	a.db(encoded_instruction, encoded_length);
+
+	// generate expansion calls
+	EmitGatherScatterElementAccess(inst, a, info, temp_xmm);
+
+
+	// restore mm
+	encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0,
+								 temp_mm, false, encoded_instruction, encoded_length);
+	a.db(encoded_instruction, encoded_length);
+
+	a.mov(rsp, rbp);
+	EmitRestoreContextNoEs(a);
+
+	return action;
+}
+
+void X86MemoryMonitor::EmitGatherScatterElementAccess(
+	const Instruction&       inst,
+	Xbyak::CodeGenerator&    a,
+	const GatherScatterInfo& info,
+	ZydisRegister            temp_xmm)
+{
+	using namespace Xbyak::util;
+
+	const auto& zinst  = inst.zinst;
+
+	uint32_t element_count = info.vector_size / std::max(info.index_size, info.value_size);
+
+	auto     read_func  = decltype(&X86MemoryMonitor::OnMemoryRead)(&X86MemoryMonitor::OnMemoryRead);
+	uint64_t on_read    = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(read_func));
+	auto     write_func = decltype(&X86MemoryMonitor::OnMemoryWrite)(&X86MemoryMonitor::OnMemoryWrite);
+	uint64_t on_write   = reinterpret_cast<uint64_t>(reinterpret_cast<void*&>(write_func));
 
 	// reserve a xmm register and a gpr register
 	auto free_reg_pair   = GetFreeRegister2(zinst.instruction, zinst.operands);
 	auto index_reg       = free_reg_pair.first;
 	auto base_backup_reg = free_reg_pair.second;
 
-	auto temp_xmm = GetFreeRegisterSSE(zinst.instruction, zinst.operands);
-	
-	auto xbk_index_reg = ZydisRegToXbyakReg(index_reg);
+	auto xbk_index_reg       = ZydisRegToXbyakReg(index_reg);
 	auto xbk_base_backup_reg = ZydisRegToXbyakReg(base_backup_reg);
-
-	uint8_t       encoded_instruction[ZYDIS_MAX_INSTRUCTION_LENGTH];
-	size_t        encoded_length = sizeof(encoded_instruction);
-	ZydisRegister temp_mm        = ZYDIS_REGISTER_NONE;
-	if (!(m_flags & SaveExtendedState))
-	{
-		// We save the largest reg corresponding to temp_xmm that is supported by the system.
-		// This is required because mov-ing a part of a
-		// ymm/zmm reg zeroes the remaining automatically. So we need to save the complete
-		// ymm/zmm reg and not just the lower xmm bits.
-		//
-		temp_mm = GetFullSizeVectorRegister(temp_xmm);
-
-		encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0,
-									 temp_mm, true, encoded_instruction, encoded_length);
-		a.db(encoded_instruction, encoded_length);
-	}
 
 	// TODO:
 	// When specify SaveExtendedState flag, rax, rdx and rdi will be modified
-	// in EmitSaveContext, thus if the instruction is scatter and address base 
+	// in EmitSaveContext, thus if the instruction is scatter and address base
 	// register is one of the above, the address will be broken, need to fix.
 	// e.g. recover again from the pushaq stack before this mov.
 	a.mov(xbk_base_backup_reg, ZydisRegToXbyakReg(info.base_reg));
@@ -394,24 +458,6 @@ InstructionResult X86MemoryMonitor::EmitGatherScatter(const Instruction& inst, X
 		}
 		a.call(rax);
 	}
-
-	if (m_flags & SaveExtendedState)
-	{
-		a.add(rsp, stack_space);
-	}
-	else
-	{
-		// restore mm
-		encoded_length = MovStackAVX(zinst.instruction.machine_mode, 0,
-									 temp_mm, false, encoded_instruction, encoded_length);
-		a.db(encoded_instruction, encoded_length);
-
-		a.mov(rsp, rbp);
-	}
-
-	EmitRestoreContext(a);
-
-	return action;
 }
 
 void X86MemoryMonitor::EmitExtractScalarFromVector(
@@ -863,11 +909,11 @@ void X86MemoryMonitor::EmitSaveContext(Xbyak::CodeGenerator& a)
 {
 	if (m_flags & SaveExtendedState)
 	{
-		EmitSaveContextAvx(a);
+		EmitSaveContextEs(a);
 	}
 	else
 	{
-		EmitSaveContextNoAvx(a);
+		EmitSaveContextNoEs(a);
 	}
 }
 
@@ -877,16 +923,16 @@ void X86MemoryMonitor::EmitRestoreContext(Xbyak::CodeGenerator& a)
 {
 	if (m_flags & SaveExtendedState)
 	{
-		EmitRestoreContextAvx(a);
+		EmitRestoreContextEs(a);
 	}
 	else
 	{
-		EmitRestoreContextNoAvx(a);
+		EmitRestoreContextNoEs(a);
 	}
 }
 
 
-void X86MemoryMonitor::EmitSaveContextAvx(Xbyak::CodeGenerator& a)
+void X86MemoryMonitor::EmitSaveContextEs(Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
 
@@ -932,7 +978,7 @@ void X86MemoryMonitor::EmitSaveContextAvx(Xbyak::CodeGenerator& a)
 	a.db(encoded_instruction, encoded_length);
 }
 
-void X86MemoryMonitor::EmitRestoreContextAvx(Xbyak::CodeGenerator& a)
+void X86MemoryMonitor::EmitRestoreContextEs(Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
 
@@ -966,7 +1012,7 @@ void X86MemoryMonitor::EmitRestoreContextAvx(Xbyak::CodeGenerator& a)
 	a.popfq();
 }
 
-void X86MemoryMonitor::EmitSaveContextNoAvx(Xbyak::CodeGenerator& a)
+void X86MemoryMonitor::EmitSaveContextNoEs(Xbyak::CodeGenerator& a)
 {
 	a.pushfq();
 
@@ -976,7 +1022,7 @@ void X86MemoryMonitor::EmitSaveContextNoAvx(Xbyak::CodeGenerator& a)
 	a.db(encoded_instruction, encoded_length);
 }
 
-void X86MemoryMonitor::EmitRestoreContextNoAvx(Xbyak::CodeGenerator& a)
+void X86MemoryMonitor::EmitRestoreContextNoEs(Xbyak::CodeGenerator& a)
 {
 	uint8_t encoded_instruction[32] = { 0 };
 	size_t  encoded_length          = Popaq(
@@ -990,11 +1036,11 @@ void X86MemoryMonitor::EmitProlog(Xbyak::CodeGenerator& a)
 {
 	if (m_flags & SaveExtendedState)
 	{
-		EmitPrologAvx(a);
+		EmitPrologEs(a);
 	}
 	else
 	{
-		EmitPrologNoAvx(a);
+		EmitPrologNoEs(a);
 	}
 }
 
@@ -1002,15 +1048,15 @@ void X86MemoryMonitor::EmitEpilog(Xbyak::CodeGenerator& a)
 {
 	if (m_flags & SaveExtendedState)
 	{
-		EmitEpilogAvx(a);
+		EmitEpilogEs(a);
 	}
 	else
 	{
-		EmitEpilogNoAvx(a);
+		EmitEpilogNoEs(a);
 	}
 }
 
-void X86MemoryMonitor::EmitPrologAvx(Xbyak::CodeGenerator& a)
+void X86MemoryMonitor::EmitPrologEs(Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
 
@@ -1018,14 +1064,14 @@ void X86MemoryMonitor::EmitPrologAvx(Xbyak::CodeGenerator& a)
 	a.sub(rsp, ShadowSpaceSize);
 }
 
-void X86MemoryMonitor::EmitEpilogAvx(Xbyak::CodeGenerator& a)
+void X86MemoryMonitor::EmitEpilogEs(Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
 
 	a.add(rsp, ShadowSpaceSize);
 }
 
-void X86MemoryMonitor::EmitPrologNoAvx(Xbyak::CodeGenerator& a)
+void X86MemoryMonitor::EmitPrologNoEs(Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
 
@@ -1037,7 +1083,7 @@ void X86MemoryMonitor::EmitPrologNoAvx(Xbyak::CodeGenerator& a)
 	a.and_(rsp, static_cast<uint32_t>(~(16 - 1)));
 }
 
-void X86MemoryMonitor::EmitEpilogNoAvx(Xbyak::CodeGenerator& a)
+void X86MemoryMonitor::EmitEpilogNoEs(Xbyak::CodeGenerator& a)
 {
 	using namespace Xbyak::util;
 

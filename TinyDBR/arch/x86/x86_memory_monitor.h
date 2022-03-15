@@ -78,19 +78,19 @@ private:
 	void EmitSaveContext(Xbyak::CodeGenerator& a);
 	void EmitRestoreContext(Xbyak::CodeGenerator& a);
 
-	void EmitSaveContextAvx(Xbyak::CodeGenerator& a);
-	void EmitRestoreContextAvx(Xbyak::CodeGenerator& a);
-	void EmitSaveContextNoAvx(Xbyak::CodeGenerator& a);
-	void EmitRestoreContextNoAvx(Xbyak::CodeGenerator& a);
+	void EmitSaveContextEs(Xbyak::CodeGenerator& a);
+	void EmitRestoreContextEs(Xbyak::CodeGenerator& a);
+	void EmitSaveContextNoEs(Xbyak::CodeGenerator& a);
+	void EmitRestoreContextNoEs(Xbyak::CodeGenerator& a);
 
 
 	void EmitProlog(Xbyak::CodeGenerator& a);
 	void EmitEpilog(Xbyak::CodeGenerator& a);
 
-	void EmitPrologAvx(Xbyak::CodeGenerator& a);
-	void EmitEpilogAvx(Xbyak::CodeGenerator& a);
-	void EmitPrologNoAvx(Xbyak::CodeGenerator& a);
-	void EmitEpilogNoAvx(Xbyak::CodeGenerator& a);
+	void EmitPrologEs(Xbyak::CodeGenerator& a);
+	void EmitEpilogEs(Xbyak::CodeGenerator& a);
+	void EmitPrologNoEs(Xbyak::CodeGenerator& a);
+	void EmitEpilogNoEs(Xbyak::CodeGenerator& a);
 
 	InstructionResult EmitMemoryAccess(
 		const Instruction& inst,
@@ -131,6 +131,17 @@ private:
 	InstructionResult EmitGatherScatter(
 		const Instruction&    inst,
 		Xbyak::CodeGenerator& a);
+	InstructionResult EmitGatherScatterEs(
+		const Instruction&    inst,
+		Xbyak::CodeGenerator& a);
+	InstructionResult EmitGatherScatterNoEs(
+		const Instruction&    inst,
+		Xbyak::CodeGenerator& a);
+	void EmitGatherScatterElementAccess(
+		const Instruction&       inst,
+		Xbyak::CodeGenerator&    a,
+		const GatherScatterInfo& info,
+		ZydisRegister            temp_xmm);
 
 	void EmitExtractScalarFromVector(
 		Xbyak::CodeGenerator& a,
