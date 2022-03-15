@@ -179,3 +179,18 @@ private:
 	std::unique_ptr<Xbyak::CodeGenerator> code_generator;
 };
 
+
+// When SaveExtendedState is not set,
+// simd registers (xmm, ymm etc.) will not be saved during user callbacks,
+// this will improve the performance distinctly.
+// But at the same time this will corrupt simd registers and crash the target
+// if such registers are used in user callbacks.
+// And it is hard to disable such register usage for a function.
+// 
+// This is a helpful macro to force a function not to use simd instructions,
+// but it is not guaranteed to work as expected, 
+// because it can only force the top level function, not for sub function calls,
+// especially for some functions which will call into the kernel implicitly (like many STL functions).
+// So be careful with SaveExtendedState flag.
+
+#define DISABLE_SIMD_INSTRUCTION __attribute__((__target__("arch=x86-64,no-fxsr,no-mmx,no-fxsr,no-sse,no-sse2")))

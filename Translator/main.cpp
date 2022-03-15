@@ -12,6 +12,10 @@
 * before the execution of main module entry point.
 */
 
+
+
+
+
 std::unique_ptr<Executor> instrumenter;
 
 
@@ -27,14 +31,16 @@ public:
 	}
 	virtual ~MyMonitor(){};
 
+	DISABLE_SIMD_INSTRUCTION
 	void OnMemoryRead(void* address, size_t size) override
 	{
-		//auto iter = m_map.lower_bound((uint64_t)address);
+		auto iter = m_map.lower_bound((uint64_t)address);
 	}
 
+	DISABLE_SIMD_INSTRUCTION
 	void OnMemoryWrite(void* address, size_t size) override
 	{
-		//auto iter = m_map.upper_bound((uint64_t)address);
+		auto iter = m_map.upper_bound((uint64_t)address);
 	}
 
 private:
