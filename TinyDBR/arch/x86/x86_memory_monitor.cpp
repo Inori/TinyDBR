@@ -849,6 +849,17 @@ void X86MemoryMonitor::EmitSaveContext(Xbyak::CodeGenerator& a)
 
 	a.sub(rsp, avx_info.xsave_frame_size);
 	a.and_(rsp, static_cast<uint32_t>(~(64 - 1)));
+
+	// zero the xsave area
+	assert(avx_info.xsave_frame_size % sizeof(uint64_t) == 0);
+	uint64_t loop_count = avx_info.xsave_frame_size / sizeof(uint64_t);
+
+	a.mov(rcx, loop_count);
+	a.mov(rdi, rsp);
+	a.xor_(rax, rax);
+	a.rep(); a.stosq();
+
+
 	// set xsave mask
 	a.or_(eax, 0xFFFFFFFF);
 	a.or_(edx, 0xFFFFFFFF);
