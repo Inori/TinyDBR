@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <LLVMInstallDir>E:\LLVM</LLVMInstallDir>
+    <LLVMToolsVersion>20.1.7</LLVMToolsVersion>
+  </PropertyGroup>
+</Project>

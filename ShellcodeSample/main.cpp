@@ -1,5 +1,40 @@
 #include "tinydbr.h"
+#include "arch/x86/x86_memory_monitor.h"
 #include <Windows.h>
+#include <memory>
+#include <string>
+#include <map>
+
+std::unique_ptr<Executor> instrumenter;
+
+class MyMonitor : public MemoryCallback
+{
+public:
+	MyMonitor()
+	{
+		m_map.insert(std::make_pair<uint64_t, uint64_t>((uint64_t)&instrumenter, (uint64_t)&instrumenter));
+		m_map.insert(std::make_pair<uint64_t, uint64_t>(1, 2));
+		m_map.insert(std::make_pair<uint64_t, uint64_t>(0x00400000, 0x00400000));
+		m_map.insert(std::make_pair<uint64_t, uint64_t>((uint64_t)this, (uint64_t)this));
+	}
+	virtual ~MyMonitor() {};
+
+	DISABLE_SIMD_INSTRUCTION
+	void OnMemoryRead(void* address, size_t size) override
+	{
+		auto iter = m_map.lower_bound((uint64_t)address);
+	}
+
+	DISABLE_SIMD_INSTRUCTION
+	void OnMemoryWrite(void* address, size_t size) override
+	{
+		auto iter = m_map.upper_bound((uint64_t)address);
+	}
+
+private:
+	std::map<uint64_t, uint64_t> m_map;
+};
+
 
 void QuickSort(int number[25], int first, int last)
 {
@@ -85,8 +120,14 @@ void TestShellcode()
 		Options options        = {};
 		options.shellcode_mode = true;
 
-		auto tinydbr = TinyDBR::GetInstance();
-		tinydbr->Init({ virtual_module }, options);
+
+		static MyMonitor monitor;
+
+		MonitorFlags flags = IgnoreCode | IgnoreStack | IgnoreRipRelative;
+		instrumenter       = std::make_unique<X86MemoryMonitor>(flags, &monitor);
+		// instrumenter = std::make_unique<TinyDBR>();
+
+		instrumenter->Init({ virtual_module }, options);
 
 		// After TinyDBR initialization, this call should
 		// be rewrite once it get called.

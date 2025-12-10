@@ -44,6 +44,7 @@
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>ClangCL</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
+    <LLVMToolsVersion>20.1.7</LLVMToolsVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -51,6 +52,7 @@
     <PlatformToolset>ClangCL</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
+    <LLVMToolsVersion>20.1.7</LLVMToolsVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -82,12 +84,12 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(SolutionDir)TinyDBR;$(SolutionDir)ThirdParty\xed\obj\wkit\include;$(LLVMInstallDir)\lib\clang\$(LLVMToolsVersion)\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)TinyDBR;$(SolutionDir)ThirdParty\xed\obj\wkit\include;$(LLVMInstallDir)\lib\clang\$(LLVMToolsVersion)\include;$(SolutionDir)ThirdParty\zydis\include;$(SolutionDir)ThirdParty\zydis\dependencies\zycore\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(SolutionDir)TinyDBR;$(SolutionDir)ThirdParty\xed\obj\wkit\include;$(LLVMInstallDir)\lib\clang\$(LLVMToolsVersion)\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)TinyDBR;$(SolutionDir)ThirdParty\xed\obj\wkit\include;$(LLVMInstallDir)\lib\clang\$(LLVMToolsVersion)\include;$(SolutionDir)ThirdParty\zydis\include;$(SolutionDir)ThirdParty\zydis\dependencies\zycore\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
